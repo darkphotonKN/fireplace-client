@@ -1,18 +1,18 @@
-@import 'tailwindcss/preflight';
+@tailwind base;
+@tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Base colors */
+  /* base colors - light mode */
   --background: 55 43% 92%; /* rgb(242, 240, 227) */
   --foreground: 0 0% 18%; /* rgb(46, 46, 46) */
+  --primary: 12 92% 65%; /* rgb(247, 111, 83) */
 
   /* shadcn component variables */
   --card: 55 43% 92%;
   --card-foreground: 0 0% 18%;
   --popover: 55 43% 92%;
   --popover-foreground: 0 0% 18%;
-  --primary: 12 92% 65%; /* rgb(247, 111, 83) */
-  --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 18%; /* rgb(46, 46, 46) */
   --secondary-foreground: 0 0% 100%;
   --muted: 55 33% 87%;
@@ -28,37 +28,28 @@
   --radius: 0.5rem;
 }
 
-.dark {
-  --background: 0 0% 4%; /* #0a0a0a */
-  --foreground: 0 0% 93%; /* #ededed */
-
-  --card: 0 0% 4%;
-  --card-foreground: 0 0% 93%;
-  --popover: 0 0% 4%;
-  --popover-foreground: 0 0% 93%;
-  --primary: 12 92% 65%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 18%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 0 0% 70%;
-  --accent: 0 0% 12%;
-  --accent-foreground: 0 0% 93%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 20%;
-  --input: 0 0% 20%;
-  --ring: 12 92% 65%;
+/* dark mode colors via media query */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 0 0% 12%; /* #1f1f1f */
+    --foreground: 43 10% 82%; /* #d1cfc0 */
+  }
 }
 
+/* apply background color based on light/dark mode */
+.bg-layout {
+  background-color: rgb(242, 240, 227); /* light mode background */
+}
+
+/* basic text styles */
 body {
   color: rgb(46, 46, 46);
-  font-family: 'Merriweather', Georgia, serif;
+  font-family: 'merriweather', georgia, serif;
   font-size: 14px;
 }
 
 h1 {
-  color: rgb(247, 111, 83);
+  color: rgb(247, 111, 83); /* always the same color in light/dark */
   font-size: 32px;
   font-weight: 700;
 }
@@ -73,4 +64,24 @@ h3 {
   color: rgb(46, 46, 46);
   font-size: 20px;
   font-weight: 700;
+}
+
+p {
+  color: rgb(46, 46, 46);
+}
+
+/* dark mode overrides */
+@media (prefers-color-scheme: dark) {
+  .bg-layout {
+    background-color: #1f1f1f; /* dark mode background */
+  }
+
+  body,
+  p,
+  h2,
+  h3 {
+    color: rgb(209, 207, 192); /* #d1cfc0 */
+  }
+
+  /* h1 keeps its color in dark mode */
 }

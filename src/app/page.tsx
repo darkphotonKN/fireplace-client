@@ -1,37 +1,32 @@
+import Todo from '@/components/Todo';
+import GitHub from '@/components/GitHub';
+
 export default function Home() {
   return (
     <main className="min-h-screen">
-      <h1 className="mb-12" style={{ color: 'rgb(247, 111, 83)' }}>
-        Flow
-      </h1>
-
       <div className="space-y-12">
+        {/* --- Today's Tasks --- */}
         <section>
-          <h2 className="mb-4" style={{ color: 'rgb(46, 46, 46)' }}>
-            Today&apos;s Tasks
-          </h2>
-          <p style={{ color: 'rgb(46, 46, 46)' }}>
-            Track your daily progress and manage your learning goals. Stay
-            focused on what matters most for your development journey.
-          </p>
+          <h2 className="mb-4">Today&apos;s Tasks</h2>
+          <Todo />
         </section>
 
         <section>
-          <h2 className="mb-4" style={{ color: 'rgb(46, 46, 46)' }}>
-            Resource Links
-          </h2>
-          <p style={{ color: 'rgb(46, 46, 46)' }}>
-            Access curated learning materials, documentation, and helpful tools.
-            Everything you need to accelerate your development skills in one
-            place.
-          </p>
+          <h2 className="mb-4">Resource Links</h2>
+          <div className="space-y-8">
+            <p>
+              Access curated learning materials, documentation, and helpful
+              tools. Everything you need to accelerate your development skills
+              in one place.
+            </p>
+
+            <GitHub />
+          </div>
         </section>
 
         <section>
-          <h2 className="mb-4" style={{ color: 'rgb(46, 46, 46)' }}>
-            AI Powered Summary
-          </h2>
-          <p style={{ color: 'rgb(46, 46, 46)' }}>
+          <h2 className="mb-4">Summary *Powered by AI*</h2>
+          <p>
             Get personalized insights and recommendations based on your learning
             patterns. Let AI help you optimize your development workflow.
           </p>
