@@ -1,13 +1,18 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
+import type { Metadata } from "next";
+import { Merriweather } from "next/font/google";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
+const merriweather = Merriweather({
+  weight: ["300", "400", "700", "900"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-merriweather",
+});
 
 export const metadata: Metadata = {
-  title: 'Flow - Your Learning & Development Hub',
+  title: "Flow - Your Learning & Development Hub",
   description:
-    'Organize your learning journey and development projects in one place',
+    "Organize your learning journey and development projects in one place",
 };
 
 export default function RootLayout({
@@ -16,8 +21,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className={merriweather.variable}>
+      <body
+        className={merriweather.className}
+        style={{ backgroundColor: "rgb(242, 240, 227)" }}
+      >
+        <div className="p-6">{children}</div>
+      </body>
     </html>
   );
 }
