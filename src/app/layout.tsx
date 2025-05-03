@@ -24,15 +24,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={merriweather.variable}>
       <body className={merriweather.className}>
-        <div className="p-6 min-h-screen bg-layout">
-          <h1 className="h-[80px]">Fireplace</h1>
-
+        <div className="min-h-screen bg-layout">
           {/* Layout with sidebar */}
           <div className="flex">
             <Sidebar />
 
             {/* Main content with left margin to accommodate sidebar */}
-            <main className="ml-64 w-full">
+            <main className="ml-64 w-full p-8">
               <div className="max-w-7xl mx-auto">{children}</div>
             </main>
           </div>

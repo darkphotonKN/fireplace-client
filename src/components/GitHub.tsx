@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 
 interface GitHubRepo {
   name: string;
@@ -12,15 +12,15 @@ interface GitHubRepo {
 
 export default function GitHub() {
   const [repo, setRepo] = useState<GitHubRepo | null>({
-    name: 'flow-client',
+    name: "flow-client",
     description:
-      'React learning dashboard with task management and resource tracking',
-    url: 'https://github.com/username/flow-client',
-    updatedAt: '2 hours ago',
+      "React learning dashboard with task management and resource tracking",
+    url: "https://github.com/username/flow-client",
+    updatedAt: "2 hours ago",
     isConnected: true,
   });
 
-  const [inputUrl, setInputUrl] = useState('');
+  const [inputUrl, setInputUrl] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleConnect = (e: React.FormEvent) => {
@@ -31,18 +31,18 @@ export default function GitHub() {
     // Simulate API call
     setTimeout(() => {
       // Extract repo name from URL
-      const urlParts = inputUrl.split('/');
-      const repoName = urlParts[urlParts.length - 1] || 'repository';
+      const urlParts = inputUrl.split("/");
+      const repoName = urlParts[urlParts.length - 1] || "repository";
 
       setRepo({
         name: repoName,
-        description: 'Connected repository',
+        description: "Connected repository",
         url: inputUrl,
-        updatedAt: 'just now',
+        updatedAt: "just now",
         isConnected: true,
       });
 
-      setInputUrl('');
+      setInputUrl("");
       setIsConnecting(false);
     }, 1000);
   };
@@ -70,16 +70,16 @@ export default function GitHub() {
               onChange={(e) => setInputUrl(e.target.value)}
               placeholder="https://github.com/username/repository"
               className="p-2 border rounded w-full"
-              style={{ backgroundColor: 'transparent' }}
+              style={{ backgroundColor: "transparent" }}
             />
             <div>
               <button
                 type="submit"
                 disabled={!inputUrl || isConnecting}
                 className="px-4 py-2 rounded text-white disabled:opacity-50"
-                style={{ backgroundColor: 'rgb(247, 111, 83)' }}
+                style={{ backgroundColor: "rgb(247, 111, 83)" }}
               >
-                {isConnecting ? 'Connecting...' : 'Connect Repository'}
+                {isConnecting ? "Connecting..." : "Connect Repository"}
               </button>
             </div>
           </form>
@@ -89,7 +89,7 @@ export default function GitHub() {
               target="_blank"
               rel="noopener noreferrer"
               className="underline"
-              style={{ color: 'rgb(247, 111, 83)' }}
+              style={{ color: "rgb(247, 111, 83)" }}
             >
               Learn more about GitHub API integration
             </a>
@@ -103,7 +103,7 @@ export default function GitHub() {
                 <a
                   href={repo.url}
                   className="hover:underline"
-                  style={{ color: 'rgb(247, 111, 83)' }}
+                  style={{ color: "rgb(247, 111, 83)" }}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -116,8 +116,8 @@ export default function GitHub() {
                   onClick={disconnectRepo}
                   className="text-xs py-1 px-2 border rounded"
                   style={{
-                    borderColor: 'rgb(247, 111, 83)',
-                    color: 'rgb(247, 111, 83)',
+                    borderColor: "rgb(247, 111, 83)",
+                    color: "rgb(247, 111, 83)",
                   }}
                 >
                   Disconnect
@@ -141,7 +141,7 @@ function GitHubIcon() {
       viewBox="0 0 24 24"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ color: 'rgb(247, 111, 83)' }}
+      style={{ color: "rgb(247, 111, 83)" }}
     >
       <path
         fillRule="evenodd"
