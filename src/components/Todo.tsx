@@ -1,56 +1,110 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
-
-interface TodoItem {
-  id: string;
-  text: string;
-  completed: boolean;
-}
+import { useState, useEffect } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  fetchChecklist,
+  createChecklistItem,
+  ChecklistItem,
+} from "@/services/api";
 
 export default function Todo() {
   // State for todo list
-  const [todos, setTodos] = useState<TodoItem[]>([
-    { id: '1', text: 'Complete React hooks tutorial', completed: false },
-    { id: '2', text: 'Review TypeScript types', completed: false },
-    { id: '3', text: 'Practice with Tailwind CSS', completed: true },
-  ]);
+  const [todos, setTodos] = useState<ChecklistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // State for new todo input
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Toggle todo completion status
+  // Fetch todos on component mount
+  useEffect(() => {
+    const loadTodos = async () => {
+      try {
+        setLoading(true);
+        const response = await fetchChecklist();
+        setTodos(response.result || []);
+        setError(null);
+      } catch (err) {
+        console.error("Failed to fetch checklist items:", err);
+        setError("Failed to load tasks. Please try again later.");
+        // Use sample data as fallback
+        setTodos([
+          {
+            id: "1",
+            description: "Complete React hooks tutorial",
+            done: false,
+          },
+          { id: "2", description: "Review TypeScript types", done: false },
+          {
+            id: "3",
+            description: "Practice with Tailwind CSS",
+            done: true,
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTodos();
+  }, []);
+
+  // Toggle todo completion status (client-side only for now)
   const toggleTodo = (id: string) => {
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      )
+        todo.id === id ? { ...todo, completed: !todo.completed } : todo,
+      ),
     );
   };
 
   // Add a new todo
-  const addTodo = (e: React.FormEvent) => {
+  const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTodo.trim() === '') return;
+    if (newTodo.trim() === "") return;
 
-    const newItem = {
-      id: Date.now().toString(),
-      text: newTodo.trim(),
-      completed: false,
-    };
+    try {
+      setIsSubmitting(true);
+      const newItem = await createChecklistItem(newTodo.trim());
+      setTodos([...todos, newItem]);
+      setNewTodo("");
+      setError(null);
+    } catch (err) {
+      console.error("Failed to create checklist item:", err);
+      setError("Failed to add task. Please try again.");
 
-    setTodos([...todos, newItem]);
-    setNewTodo('');
+      // Fallback: add item locally if API fails
+      const fallbackItem = {
+        id: Date.now().toString(),
+        description: newTodo.trim(),
+        completed: false,
+      };
+      setTodos([...todos, fallbackItem]);
+      setNewTodo("");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Delete a todo
+  // Delete a todo (client-side only for now)
   const deleteTodo = (id: string) => {
     setTodos(todos.filter((todo) => todo.id !== id));
   };
 
+  if (loading) {
+    return <div className="py-4">Loading tasks...</div>;
+  }
+
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="p-2 text-sm text-red-600 bg-red-50 rounded-md">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={addTodo} className="flex space-x-2 mb-4">
         <input
           type="text"
@@ -58,45 +112,53 @@ export default function Todo() {
           onChange={(e) => setNewTodo(e.target.value)}
           placeholder="Add a new task..."
           className="flex-1 p-2 border rounded"
-          style={{ backgroundColor: 'transparent' }}
+          style={{ backgroundColor: "transparent" }}
+          disabled={isSubmitting}
         />
         <button
           type="submit"
           className="px-4 py-2 rounded"
-          style={{ backgroundColor: 'rgb(247, 111, 83)', color: 'white' }}
+          style={{ backgroundColor: "rgb(247, 111, 83)", color: "white" }}
+          disabled={isSubmitting}
         >
-          Add
+          {isSubmitting ? "Adding..." : "Add"}
         </button>
       </form>
 
-      <ul className="space-y-3">
-        {todos.map((todo) => (
-          <li key={todo.id} className="flex items-center justify-between group">
-            <div className="flex items-center space-x-3">
-              <Checkbox
-                id={`todo-${todo.id}`}
-                checked={todo.completed}
-                onCheckedChange={() => toggleTodo(todo.id)}
-              />
-              <label
-                htmlFor={`todo-${todo.id}`}
-                className={`text-sm ${
-                  todo.completed ? 'line-through opacity-70' : ''
-                }`}
-              >
-                {todo.text}
-              </label>
-            </div>
-            <button
-              onClick={() => deleteTodo(todo.id)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2"
-              style={{ color: 'rgb(247, 111, 83)' }}
+      {todos.length === 0 && !loading ? (
+        <p className="text-gray-500 text-sm">No tasks yet. Add one above!</p>
+      ) : (
+        <ul className="space-y-3">
+          {todos.map((todo) => (
+            <li
+              key={todo.id}
+              className="flex items-center justify-between group"
             >
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
+              <div className="flex items-center space-x-3">
+                <Checkbox
+                  id={`todo-${todo.id}`}
+                  checked={todo.completed}
+                  onCheckedChange={() => toggleTodo(todo.id)}
+                />
+                <label
+                  htmlFor={`todo-${todo.id}`}
+                  className={`text-sm ${todo.completed ? "line-through opacity-70" : ""
+                    }`}
+                >
+                  {todo.description}
+                </label>
+              </div>
+              <button
+                onClick={() => deleteTodo(todo.id)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2"
+                style={{ color: "rgb(247, 111, 83)" }}
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
