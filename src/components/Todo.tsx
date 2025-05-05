@@ -175,9 +175,26 @@ export default function Todo() {
 
     try {
       setIsSubmitting(true);
+      // optimistic temp item
+      const tempId = `id_${Date.now()}`;
+      const tempNewItem: ChecklistItem = {
+        id: tempId,
+        description: newTodo,
+        done: false,
+      };
+
+      const optimisticUpdatedTodos = [...todos, tempNewItem];
+      setTodos(optimisticUpdatedTodos);
+
       const newItem = await createChecklistItem(newTodo.trim());
-      setTodos([...todos, newItem]);
-      setNewTodo("");
+
+      // update the newly created todo with the one from the API to sync the id
+      const newTodos = optimisticUpdatedTodos.map((todo) =>
+        todo.id === tempId ? newItem : todo,
+      );
+
+      setTodos(newTodos);
+
       setError(null);
     } catch (error) {
       console.error("Failed to create checklist item:", error);
@@ -195,6 +212,8 @@ export default function Todo() {
       setIsSubmitting(false);
     }
   };
+
+  console.log("@Debug todos:", todos);
 
   // Delete a todo
   const deleteTodo = async (id: string) => {
