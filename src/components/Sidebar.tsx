@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Logo from './Logo';
+import { usePlanId } from '@/hooks/usePlanId';
 
 // Interface for navigation items
 interface NavItem {
@@ -17,9 +18,61 @@ interface NavSection {
   items: NavItem[];
 }
 
+// Interface for plan data from API
+interface Plan {
+  id: string;
+  name: string;
+  planType: string;
+  focus?: string;
+  description?: string;
+}
+
+// Interface for API response
+interface ApiResponse {
+  statusCode: number;
+  message: string;
+  result: Plan[];
+}
+
 export default function Sidebar() {
+  const { planId, setPlanId } = usePlanId();
+
   // State to track dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // State for plans
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch plans from API
+  useEffect(() => {
+    const fetchPlans = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch('http://localhost:6060/api/plans');
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch plans: ${response.statusText}`);
+        }
+
+        const data: ApiResponse = await response.json();
+        console.log('Plans:', data);
+        setPlans(data.result || []);
+      } catch (err) {
+        console.error('Error fetching plans:', err);
+        setError('Failed to load plans');
+        // Set empty plans array as fallback
+        setPlans([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPlans();
+  }, []);
 
   // Listen for system dark mode changes
   useEffect(() => {
@@ -42,20 +95,35 @@ export default function Sidebar() {
     };
   }, []);
 
-  // Define navigation structure
-  const [navSections] = useState<NavSection[]>([
+  // Handle plan selection
+  const handlePlanClick = (planId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    setPlanId(planId);
+  };
+
+  // Create nav sections based on plans
+  const navSections: NavSection[] = [
     {
       title: 'Learning',
-      items: [
-        { name: 'Microservices', href: '/learning/microservices' },
-        { name: 'GenAI', href: '/learning/genai' },
-      ],
+      items: plans
+        .filter((plan) => plan.planType === 'learning')
+        .map((plan) => ({
+          name: plan.name,
+          href: `/?plan_id=${plan.id}`,
+          isActive: plan.id === planId,
+        })),
     },
     {
       title: 'Projects',
-      items: [{ name: 'Fireplace Project', href: '/', isActive: true }],
+      items: plans
+        .filter((plan) => plan.planType === 'development')
+        .map((plan) => ({
+          name: plan.name,
+          href: `/?plan_id=${plan.id}`,
+          isActive: plan.id === planId,
+        })),
     },
-  ]);
+  ];
 
   return (
     <aside
@@ -82,34 +150,50 @@ export default function Sidebar() {
               </h3>
 
               <ul className="space-y-1 pl-2">
-                {section.items.map((item) => (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className={`flex px-3 py-2 text-sm rounded-md ${
-                        item.isActive
-                          ? 'bg-opacity-30 font-medium'
-                          : 'hover:bg-opacity-20'
-                      } transition-colors`}
-                      style={{
-                        backgroundColor: item.isActive
-                          ? 'rgba(247, 111, 83, 0.1)'
-                          : 'transparent',
-                        color: item.isActive ? 'rgb(247, 111, 83)' : 'inherit',
-                      }}
-                    >
-                      {item.name}
-                    </Link>
+                {isLoading ? (
+                  <li className="text-sm opacity-70 px-3 py-2">Loading...</li>
+                ) : error ? (
+                  <li className="text-sm opacity-70 px-3 py-2">{error}</li>
+                ) : section.items.length === 0 ? (
+                  <li className="text-sm opacity-70 px-3 py-2">
+                    No {section.title.toLowerCase()} found
                   </li>
-                ))}
+                ) : (
+                  section.items.map((item) => (
+                    <li key={item.name}>
+                      <a
+                        href={item.href}
+                        onClick={(e) =>
+                          handlePlanClick(item.href.split('plan_id=')[1], e)
+                        }
+                        className={`flex px-3 py-2 text-sm rounded-md ${
+                          item.isActive
+                            ? 'bg-opacity-30 font-medium'
+                            : 'hover:bg-opacity-20'
+                        } transition-colors cursor-pointer`}
+                        style={{
+                          backgroundColor: item.isActive
+                            ? 'rgba(247, 111, 83, 0.1)'
+                            : 'transparent',
+                          color: item.isActive
+                            ? 'rgb(247, 111, 83)'
+                            : 'inherit',
+                        }}
+                      >
+                        {item.name}
+                      </a>
+                    </li>
+                  ))
+                )}
               </ul>
             </div>
           ))}
         </div>
 
         {/* Plan Button */}
-        <button
-          className="w-full py-2 px-4 rounded-md text-sm font-medium transition-all hover:bg-opacity-10"
+        <Link
+          href="/create-plan"
+          className="block w-full py-2 px-4 rounded-md text-sm font-medium text-center transition-all hover:bg-opacity-10"
           style={{
             border: '1px solid rgb(247, 111, 83)',
             color: 'rgb(247, 111, 83)',
@@ -119,7 +203,7 @@ export default function Sidebar() {
           }}
         >
           Create New Plan
-        </button>
+        </Link>
       </nav>
     </aside>
   );

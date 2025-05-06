@@ -10,8 +10,10 @@ import {
   ChecklistItem,
   getChecklistSuggestion,
 } from '@/services/api';
+import { usePlanId } from '@/hooks/usePlanId';
 
 export default function Todo() {
+  const { planId } = usePlanId();
   const [todos, setTodos] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export default function Todo() {
     [id: string]: boolean;
   }>({});
 
-  // Fetch todos on component mount
+  // Fetch todos on component mount and when planId changes
   useEffect(() => {
     const loadTodos = async () => {
       try {
@@ -72,7 +74,7 @@ export default function Todo() {
     };
 
     loadTodos();
-  }, []);
+  }, [planId]); // Re-fetch when planId changes
 
   // Handle typing animation for input
   useEffect(() => {

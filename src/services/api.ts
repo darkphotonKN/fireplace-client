@@ -1,10 +1,18 @@
-import { config } from '@/config/environment';
+import { config } from "@/config/environment";
 
 // API base URL from environment config
 const API_BASE_URL = config.apiBaseUrl;
 
-// Fixed plan ID for testing
-const PLAN_ID = config.testPlanId;
+// Get plan ID from query param or fallback to config
+const getPlanId = (): string => {
+  // Check if window is defined (client-side only)
+  if (typeof window !== "undefined") {
+    const urlParams = new URLSearchParams(window.location.search);
+    const planIdParam = urlParams.get("plan_id");
+    return planIdParam || config.testPlanId;
+  }
+  return config.testPlanId;
+};
 
 export interface ChecklistItem {
   id: string;
@@ -26,11 +34,11 @@ export interface UpdateChecklistItemRequest {
 }
 
 export interface DeleteChecklistItemResponse {
-  result: 'success' | 'failure';
+  result: "success" | "failure";
 }
 
 export interface UpdateChecklistItemResponse {
-  result: 'success' | 'failure';
+  result: "success" | "failure";
   item?: ChecklistItem;
 }
 
@@ -44,8 +52,9 @@ export interface ChecklistSuggestionResponse {
  * Fetch all checklist items for the current plan
  */
 export const fetchChecklist = async (): Promise<ChecklistResponse> => {
+  const planId = getPlanId();
   const response = await fetch(
-    `${API_BASE_URL}/api/plans/${PLAN_ID}/checklists`
+    `${API_BASE_URL}/api/plans/${planId}/checklists`,
   );
 
   if (!response.ok) {
@@ -59,17 +68,18 @@ export const fetchChecklist = async (): Promise<ChecklistResponse> => {
  * Create a new checklist item
  */
 export const createChecklistItem = async (
-  description: string
+  description: string,
 ): Promise<ChecklistItem> => {
+  const planId = getPlanId();
   const response = await fetch(
-    `${API_BASE_URL}/api/plans/${PLAN_ID}/checklists`,
+    `${API_BASE_URL}/api/plans/${planId}/checklists`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ description }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -86,31 +96,32 @@ export const createChecklistItem = async (
  */
 export const updateChecklistItem = async (
   id: string,
-  updates: UpdateChecklistItemRequest
+  updates: UpdateChecklistItemRequest,
 ): Promise<UpdateChecklistItemResponse> => {
   try {
+    const planId = getPlanId();
     const response = await fetch(
-      `${API_BASE_URL}/api/plans/${PLAN_ID}/checklists/${id}`,
+      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(updates),
-      }
+      },
     );
 
     if (!response.ok) {
       throw new Error(
-        `Failed to update checklist item: ${response.statusText}`
+        `Failed to update checklist item: ${response.statusText}`,
       );
     }
 
     const data = await response.json();
-    return { result: 'success', item: data };
+    return { result: "success", item: data };
   } catch (err) {
-    console.error('Failed to update checklist item:', err);
-    return { result: 'failure' };
+    console.error("Failed to update checklist item:", err);
+    return { result: "failure" };
   }
 };
 
@@ -118,23 +129,24 @@ export const updateChecklistItem = async (
  * Delete a checklist item
  */
 export const deleteChecklistItem = async (
-  id: string
+  id: string,
 ): Promise<DeleteChecklistItemResponse> => {
   try {
+    const planId = getPlanId();
     const response = await fetch(
-      `${API_BASE_URL}/api/plans/${PLAN_ID}/checklists/${id}`,
+      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     return await response.json();
   } catch (err) {
-    console.log('Failed to delete checklist item, error:', err);
-    return { result: 'failure' };
+    console.log("Failed to delete checklist item, error:", err);
+    return { result: "failure" };
   }
 };
 
@@ -144,23 +156,24 @@ export const deleteChecklistItem = async (
 export const getChecklistSuggestion =
   async (): Promise<ChecklistSuggestionResponse> => {
     try {
+      const planId = getPlanId();
       const response = await fetch(
-        `${API_BASE_URL}/api/insights/checklist-suggestion`
+        `${API_BASE_URL}/api/insights/checklist-suggestion?plan_id=${planId}`,
       );
 
       if (!response.ok) {
         throw new Error(
-          `Failed to get checklist suggestion: ${response.statusText}`
+          `Failed to get checklist suggestion: ${response.statusText}`,
         );
       }
 
       return await response.json();
     } catch (err) {
-      console.error('Failed to get checklist suggestion:', err);
+      console.error("Failed to get checklist suggestion:", err);
       // Return a fallback suggestion if the API fails
       return {
-        message: 'Failed to generate suggestion',
-        result: 'Review your current project priorities',
+        message: "Failed to generate suggestion",
+        result: "Review your current project priorities",
         statusCode: 200,
       };
     }

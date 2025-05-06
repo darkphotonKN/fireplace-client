@@ -1,7 +1,7 @@
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import Todo from "@/components/Todo";
-import GitHub from "@/components/GitHub";
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import Todo from '@/components/Todo';
+import GitHub from '@/components/GitHub';
 
 export default function Home() {
   return (
