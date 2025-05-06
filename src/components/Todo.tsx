@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useRef } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useState, useEffect, useRef } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   fetchChecklist,
   createChecklistItem,
@@ -9,24 +9,37 @@ import {
   deleteChecklistItem,
   ChecklistItem,
   getChecklistSuggestion,
-} from "@/services/api";
+} from '@/services/api';
 
 export default function Todo() {
   const [todos, setTodos] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [newTodo, setNewTodo] = useState("");
+  const [newTodo, setNewTodo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
+  const [editText, setEditText] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   // AI suggestion state
   const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [displaySuggestion, setDisplaySuggestion] = useState('');
+  const [isSuggestionTyping, setIsSuggestionTyping] = useState(false);
   const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
+
+  // Typing animation state
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingIndex, setTypingIndex] = useState(0);
+  const [fullText, setFullText] = useState('');
+  const typingSpeed = 15; // milliseconds per character (faster)
+
+  // New todo animation state
+  const [newTodoAnimations, setNewTodoAnimations] = useState<{
+    [id: string]: boolean;
+  }>({});
 
   // Fetch todos on component mount
   useEffect(() => {
@@ -37,19 +50,19 @@ export default function Todo() {
         setTodos(response.result || []);
         setError(null);
       } catch (error) {
-        console.error("Failed to fetch checklist items:", error);
-        setError("Failed to load tasks. Please try again later.");
+        console.error('Failed to fetch checklist items:', error);
+        setError('Failed to load tasks. Please try again later.');
         // Use sample data as fallback
         setTodos([
           {
-            id: "1",
-            description: "Complete React hooks tutorial",
+            id: '1',
+            description: 'Complete React hooks tutorial',
             done: false,
           },
-          { id: "2", description: "Review TypeScript types", done: false },
+          { id: '2', description: 'Review TypeScript types', done: false },
           {
-            id: "3",
-            description: "Practice with Tailwind CSS",
+            id: '3',
+            description: 'Practice with Tailwind CSS',
             done: true,
           },
         ]);
@@ -60,6 +73,45 @@ export default function Todo() {
 
     loadTodos();
   }, []);
+
+  // Handle typing animation for input
+  useEffect(() => {
+    if (!isTyping || typingIndex >= fullText.length) return;
+
+    const timeout = setTimeout(() => {
+      setNewTodo(fullText.slice(0, typingIndex + 1));
+      setTypingIndex((prevIndex) => prevIndex + 1);
+    }, typingSpeed);
+
+    return () => clearTimeout(timeout);
+  }, [isTyping, typingIndex, fullText]);
+
+  // End typing animation when complete
+  useEffect(() => {
+    if (isTyping && typingIndex >= fullText.length) {
+      setIsTyping(false);
+    }
+  }, [typingIndex, fullText, isTyping]);
+
+  // Handle typing animation for suggestion display
+  useEffect(() => {
+    if (!isSuggestionTyping || !suggestion) return;
+
+    let currentIndex = 0;
+    setDisplaySuggestion('');
+
+    const interval = setInterval(() => {
+      if (currentIndex < suggestion.length) {
+        setDisplaySuggestion((prev) => prev + suggestion[currentIndex]);
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+        setIsSuggestionTyping(false);
+      }
+    }, typingSpeed);
+
+    return () => clearInterval(interval);
+  }, [isSuggestionTyping, suggestion, typingSpeed]);
 
   // Focus on edit input when entering edit mode
   useEffect(() => {
@@ -78,31 +130,31 @@ export default function Todo() {
     const newDoneStatus = !todoToToggle.done;
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, done: newDoneStatus } : todo,
-      ),
+        todo.id === id ? { ...todo, done: newDoneStatus } : todo
+      )
     );
 
     try {
       // API update
       const response = await updateChecklistItem(id, { done: newDoneStatus });
-      if (response.result !== "success") {
+      if (response.result !== 'success') {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
-            todo.id === id ? { ...todo, done: todoToToggle.done } : todo,
-          ),
+            todo.id === id ? { ...todo, done: todoToToggle.done } : todo
+          )
         );
-        setError("Failed to update task status. Please try again.");
+        setError('Failed to update task status. Please try again.');
       }
     } catch (error) {
-      console.error("Error toggling todo:", error);
+      console.error('Error toggling todo:', error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, done: todoToToggle.done } : todo,
-        ),
+          todo.id === id ? { ...todo, done: todoToToggle.done } : todo
+        )
       );
-      setError("Failed to update task status. Please try again.");
+      setError('Failed to update task status. Please try again.');
     }
   };
 
@@ -115,12 +167,12 @@ export default function Todo() {
   // Cancel editing
   const cancelEditing = () => {
     setEditingId(null);
-    setEditText("");
+    setEditText('');
   };
 
   // Update todo description
   const updateTodoDescription = async (id: string) => {
-    if (editText.trim() === "") return;
+    if (editText.trim() === '') return;
 
     // Find the original todo
     const originalTodo = todos.find((todo) => todo.id === id);
@@ -135,8 +187,8 @@ export default function Todo() {
 
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, description: updatedText } : todo,
-      ),
+        todo.id === id ? { ...todo, description: updatedText } : todo
+      )
     );
 
     try {
@@ -145,35 +197,35 @@ export default function Todo() {
         description: editText.trim(),
       });
 
-      if (response.result !== "success") {
+      if (response.result !== 'success') {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
-            todo.id === id ? { ...todo, description: originalText } : todo,
-          ),
+            todo.id === id ? { ...todo, description: originalText } : todo
+          )
         );
-        setError("Failed to update task. Please try again.");
+        setError('Failed to update task. Please try again.');
       }
     } catch (error) {
-      console.error("Error updating todo description:", error);
+      console.error('Error updating todo description:', error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, description: originalText } : todo,
-        ),
+          todo.id === id ? { ...todo, description: originalText } : todo
+        )
       );
-      setError("Failed to update task. Please try again.");
+      setError('Failed to update task. Please try again.');
     } finally {
       setIsUpdating(false);
       setEditingId(null);
-      setEditText("");
+      setEditText('');
     }
   };
 
   // Add a new todo
   const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTodo.trim() === "") return;
+    if (newTodo.trim() === '') return;
 
     try {
       setIsSubmitting(true);
@@ -185,6 +237,9 @@ export default function Todo() {
         done: false,
       };
 
+      // Start animation for the new todo
+      setNewTodoAnimations((prev) => ({ ...prev, [tempId]: true }));
+
       const optimisticUpdatedTodos = [...todos, tempNewItem];
       setTodos(optimisticUpdatedTodos);
 
@@ -192,28 +247,67 @@ export default function Todo() {
 
       // update the newly created todo with the one from the API to sync the id
       const newTodos = optimisticUpdatedTodos.map((todo) =>
-        todo.id === tempId ? newItem : todo,
+        todo.id === tempId ? { ...newItem, id: newItem.id || tempId } : todo
       );
 
       setTodos(newTodos);
 
+      // Update animation tracking for new item ID
+      if (newItem.id && newItem.id !== tempId) {
+        setNewTodoAnimations((prev) => {
+          const updated = { ...prev };
+          delete updated[tempId];
+          updated[newItem.id] = true;
+
+          // End animation after 1 second
+          setTimeout(() => {
+            setNewTodoAnimations((current) => {
+              const final = { ...current };
+              delete final[newItem.id];
+              return final;
+            });
+          }, 1000);
+
+          return updated;
+        });
+      }
+
       // clear input
-      setNewTodo("");
+      setNewTodo('');
       setError(null);
       // Clear suggestion after adding a todo
       setSuggestion(null);
+      setDisplaySuggestion('');
     } catch (error) {
-      console.error("Failed to create checklist item:", error);
-      setError("Failed to add task. Please try again.");
+      console.error('Failed to create checklist item:', error);
+      setError('Failed to add task. Please try again.');
+
+      // Create a local ID for the fallback item
+      const fallbackId = `fallback_${Date.now()}`;
 
       // Fallback: add item locally if API fails
       const fallbackItem = {
-        id: Date.now().toString(),
+        id: fallbackId,
         description: newTodo.trim(),
         done: false,
       };
       setTodos([...todos, fallbackItem]);
-      setNewTodo("");
+      setNewTodo('');
+
+      // Add animation for the fallback item
+      setNewTodoAnimations((prev) => ({
+        ...prev,
+        [fallbackId]: true,
+      }));
+
+      // Remove animation after a delay
+      setTimeout(() => {
+        setNewTodoAnimations((current) => {
+          const final = { ...current };
+          delete final[fallbackId];
+          return final;
+        });
+      }, 1000);
     } finally {
       setIsSubmitting(false);
     }
@@ -225,24 +319,33 @@ export default function Todo() {
       setIsFetchingSuggestion(true);
       setError(null);
       const response = await getChecklistSuggestion();
+
+      // Start typing animation for the suggestion
       setSuggestion(response.result);
+      setDisplaySuggestion('');
+      setIsSuggestionTyping(true);
     } catch (error) {
-      console.error("Failed to get AI suggestion:", error);
-      setError("Failed to get AI suggestion. Please try again.");
+      console.error('Failed to get AI suggestion:', error);
+      setError('Failed to get AI suggestion. Please try again.');
     } finally {
       setIsFetchingSuggestion(false);
     }
   };
 
-  // Use the suggestion as the new todo
+  // Start typing animation for the suggestion
   const useSuggestion = () => {
     if (suggestion) {
-      setNewTodo(suggestion);
+      // Clear current input and prepare for typing animation
+      setNewTodo('');
+      setFullText(suggestion);
+      setTypingIndex(0);
+      setIsTyping(true);
       setSuggestion(null);
+      setDisplaySuggestion('');
     }
   };
 
-  console.log("@Debug todos:", todos);
+  console.log('@Debug todos:', todos);
 
   // Delete a todo
   const deleteTodo = async (id: string) => {
@@ -255,16 +358,16 @@ export default function Todo() {
 
     try {
       const response = await deleteChecklistItem(id);
-      if (response.result !== "success") {
+      if (response.result !== 'success') {
         // Restore if deletion failed
         setTodos((prevTodos) => [...prevTodos, todoToDelete]);
-        setError("Failed to delete task. Please try again.");
+        setError('Failed to delete task. Please try again.');
       }
     } catch (error) {
-      console.error("Error deleting todo:", error);
+      console.error('Error deleting todo:', error);
       // Restore if exception
       setTodos((prevTodos) => [...prevTodos, todoToDelete]);
-      setError("Failed to delete task. Please try again.");
+      setError('Failed to delete task. Please try again.');
     }
   };
 
@@ -288,27 +391,27 @@ export default function Todo() {
             onChange={(e) => setNewTodo(e.target.value)}
             placeholder="Add a new task..."
             className="flex-1 p-2 border rounded"
-            style={{ backgroundColor: "transparent" }}
-            disabled={isSubmitting}
+            style={{ backgroundColor: 'transparent' }}
+            disabled={isSubmitting || isTyping}
           />
           <button
             type="submit"
             className="px-4 py-2 rounded bg-white/5 dark:bg-gray-900/10"
-            style={{ color: "rgb(247, 111, 83)" }}
-            disabled={isSubmitting}
+            style={{ color: 'rgb(247, 111, 83)' }}
+            disabled={isSubmitting || isTyping}
           >
-            {isSubmitting ? "Adding..." : "Add"}
+            {isSubmitting ? 'Adding...' : 'Add'}
           </button>
         </form>
 
         <div className="flex justify-between items-center">
           <button
             onClick={getAISuggestion}
-            disabled={isFetchingSuggestion}
+            disabled={isFetchingSuggestion || isTyping || isSuggestionTyping}
             className="text-sm text-gray-600 flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5"
           >
             {isFetchingSuggestion ? (
-              "Getting suggestion..."
+              'Getting suggestion...'
             ) : (
               <>
                 <svg
@@ -342,12 +445,16 @@ export default function Todo() {
                 <div className="ml-2 text-gray-600 text-sm">
                   <p className="font-medium">AI Suggestion</p>
                   <p className="mt-1 text-gray-600 dark:text-gray-400">
-                    {suggestion}
+                    {isSuggestionTyping ? displaySuggestion : suggestion}
+                    {isSuggestionTyping && (
+                      <span className="animate-pulse">|</span>
+                    )}
                   </p>
                 </div>
               </div>
               <button
                 onClick={useSuggestion}
+                disabled={isTyping || isSuggestionTyping}
                 className="ml-4 px-2.5 py-0.5 h-[30px] text-xs font-medium rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
               >
                 Use suggestion
@@ -364,7 +471,9 @@ export default function Todo() {
           {todos.map((todo) => (
             <li
               key={todo.id}
-              className="flex items-center justify-between group"
+              className={`flex items-center justify-between group transition-all duration-200 ${
+                newTodoAnimations[todo.id] ? 'animate-fadeIn' : ''
+              }`}
             >
               {editingId === todo.id ? (
                 <div className="flex items-center space-x-3 flex-1">
@@ -380,16 +489,16 @@ export default function Todo() {
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                       className="flex-1 px-2 py-1 text-sm border rounded"
-                      style={{ backgroundColor: "transparent" }}
+                      style={{ backgroundColor: 'transparent' }}
                       disabled={isUpdating}
                     />
                     <button
                       onClick={() => updateTodoDescription(todo.id)}
                       className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
-                      style={{ color: "rgb(247, 111, 83)" }}
+                      style={{ color: 'rgb(247, 111, 83)' }}
                       disabled={isUpdating}
                     >
-                      {isUpdating ? "Saving..." : "Save"}
+                      {isUpdating ? 'Saving...' : 'Save'}
                     </button>
                     <button
                       onClick={cancelEditing}
@@ -410,10 +519,13 @@ export default function Todo() {
                     />
                     <label
                       className={`text-sm cursor-pointer flex-1 ${
-                        todo.done ? "line-through opacity-70" : ""
-                      }`}
+                        todo.done ? 'line-through opacity-70' : ''
+                      } ${newTodoAnimations[todo.id] ? 'relative' : ''}`}
                     >
                       {todo.description}
+                      {newTodoAnimations[todo.id] && (
+                        <span className="absolute -right-1 bottom-0 h-5 w-0.5 bg-orange-400 dark:bg-orange-500 animate-cursor"></span>
+                      )}
                     </label>
                   </div>
 
@@ -421,14 +533,14 @@ export default function Todo() {
                     <button
                       onClick={() => startEditing(todo)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2"
-                      style={{ color: "rgb(247, 111, 83)" }}
+                      style={{ color: 'rgb(247, 111, 83)' }}
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => deleteTodo(todo.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2"
-                      style={{ color: "rgb(247, 111, 83)" }}
+                      style={{ color: 'rgb(247, 111, 83)' }}
                     >
                       Delete
                     </button>
@@ -439,6 +551,35 @@ export default function Todo() {
           ))}
         </ul>
       )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes cursorBlink {
+          0%,
+          50% {
+            opacity: 1;
+          }
+          51%,
+          100% {
+            opacity: 0;
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        .animate-cursor {
+          animation: cursorBlink 0.8s infinite;
+        }
+      `}</style>
     </div>
   );
 }
