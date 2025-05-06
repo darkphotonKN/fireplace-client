@@ -8,23 +8,25 @@ import {
   updateChecklistItem,
   deleteChecklistItem,
   ChecklistItem,
+  getChecklistSuggestion,
 } from "@/services/api";
 
 export default function Todo() {
-  // State for todo list
   const [todos, setTodos] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State for new todo input
   const [newTodo, setNewTodo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State for editing
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
+
+  // AI suggestion state
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
 
   // Fetch todos on component mount
   useEffect(() => {
@@ -195,7 +197,11 @@ export default function Todo() {
 
       setTodos(newTodos);
 
+      // clear input
+      setNewTodo("");
       setError(null);
+      // Clear suggestion after adding a todo
+      setSuggestion(null);
     } catch (error) {
       console.error("Failed to create checklist item:", error);
       setError("Failed to add task. Please try again.");
@@ -210,6 +216,29 @@ export default function Todo() {
       setNewTodo("");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Get AI suggestion for a new todo
+  const getAISuggestion = async () => {
+    try {
+      setIsFetchingSuggestion(true);
+      setError(null);
+      const response = await getChecklistSuggestion();
+      setSuggestion(response.result);
+    } catch (error) {
+      console.error("Failed to get AI suggestion:", error);
+      setError("Failed to get AI suggestion. Please try again.");
+    } finally {
+      setIsFetchingSuggestion(false);
+    }
+  };
+
+  // Use the suggestion as the new todo
+  const useSuggestion = () => {
+    if (suggestion) {
+      setNewTodo(suggestion);
+      setSuggestion(null);
     }
   };
 
@@ -251,43 +280,99 @@ export default function Todo() {
         </div>
       )}
 
-      <form onSubmit={addTodo} className="flex space-x-2 mb-4">
-        <input
-          type="text"
-          value={newTodo}
-          onChange={(e) => setNewTodo(e.target.value)}
-          placeholder="Add a new task..."
-          className="flex-1 p-2 border rounded"
-          style={{ backgroundColor: "transparent" }}
-          disabled={isSubmitting}
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 rounded"
-          style={{ backgroundColor: "rgb(247, 111, 83)", color: "white" }}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Adding..." : "Add"}
-        </button>
-      </form>
+      <div className="space-y-3">
+        <form onSubmit={addTodo} className="flex space-x-2">
+          <input
+            type="text"
+            value={newTodo}
+            onChange={(e) => setNewTodo(e.target.value)}
+            placeholder="Add a new task..."
+            className="flex-1 p-2 border rounded"
+            style={{ backgroundColor: "transparent" }}
+            disabled={isSubmitting}
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 rounded bg-white/5 dark:bg-gray-900/10"
+            style={{ color: "rgb(247, 111, 83)" }}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Adding..." : "Add"}
+          </button>
+        </form>
+
+        <div className="flex justify-between items-center">
+          <button
+            onClick={getAISuggestion}
+            disabled={isFetchingSuggestion}
+            className="text-sm text-gray-600 flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5"
+          >
+            {isFetchingSuggestion ? (
+              "Getting suggestion..."
+            ) : (
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="w-4 h-4 mr-1.5"
+                >
+                  <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-.707 9.293a1 1 0 0 1 0 1.414 1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L9 10.586l3.293-3.293a1 1 0 0 1 1.414 1.414l-4 4z" />
+                </svg>
+                Get AI suggestion
+              </>
+            )}
+          </button>
+        </div>
+
+        {suggestion && (
+          <div className="mt-2 p-3 text-sm flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5 dark:bg-gray-900/10">
+            <div className="flex justify-between items-center w-full">
+              <div className="flex items-start">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="w-5 h-5 text-gray-400 dark:text-gray-500"
+                  >
+                    <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" />
+                  </svg>
+                </div>
+                <div className="ml-2 text-gray-600 text-sm">
+                  <p className="font-medium">AI Suggestion</p>
+                  <p className="mt-1 text-gray-600 dark:text-gray-400">
+                    {suggestion}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={useSuggestion}
+                className="ml-4 px-2.5 py-0.5 h-[30px] text-xs font-medium rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+              >
+                Use suggestion
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {todos.length === 0 && !loading ? (
         <p className="text-gray-500 text-sm">No tasks yet. Add one above!</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-3 mt-4">
           {todos.map((todo) => (
             <li
               key={todo.id}
               className="flex items-center justify-between group"
             >
-              <div className="flex items-center space-x-3 flex-1">
-                <Checkbox
-                  id={`todo-${todo.id}`}
-                  checked={todo.done}
-                  onCheckedChange={() => toggleTodo(todo.id)}
-                />
-
-                {editingId === todo.id ? (
+              {editingId === todo.id ? (
+                <div className="flex items-center space-x-3 flex-1">
+                  <Checkbox
+                    id={`todo-${todo.id}`}
+                    checked={todo.done}
+                    onCheckedChange={() => toggleTodo(todo.id)}
+                  />
                   <div className="flex flex-1 space-x-2">
                     <input
                       ref={editInputRef}
@@ -300,51 +385,56 @@ export default function Todo() {
                     />
                     <button
                       onClick={() => updateTodoDescription(todo.id)}
-                      className="px-2 py-1 text-xs rounded"
-                      style={{
-                        backgroundColor: "rgb(247, 111, 83)",
-                        color: "white",
-                      }}
+                      className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
+                      style={{ color: "rgb(247, 111, 83)" }}
                       disabled={isUpdating}
                     >
                       {isUpdating ? "Saving..." : "Save"}
                     </button>
                     <button
                       onClick={cancelEditing}
-                      className="px-2 py-1 text-xs rounded bg-gray-200 dark:bg-gray-700"
+                      className="px-2 py-1 text-xs rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700"
                       disabled={isUpdating}
                     >
                       Cancel
                     </button>
                   </div>
-                ) : (
-                  <div className="flex flex-1 items-center">
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center space-x-3 flex-1">
+                    <Checkbox
+                      id={`todo-${todo.id}`}
+                      checked={todo.done}
+                      onCheckedChange={() => toggleTodo(todo.id)}
+                    />
                     <label
-                      onClick={() => startEditing(todo)}
                       className={`text-sm cursor-pointer flex-1 ${
                         todo.done ? "line-through opacity-70" : ""
                       }`}
                     >
                       {todo.description}
                     </label>
+                  </div>
+
+                  <div className="flex space-x-2">
                     <button
                       onClick={() => startEditing(todo)}
-                      className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs px-2 py-1 rounded"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2"
                       style={{ color: "rgb(247, 111, 83)" }}
                     >
                       Edit
                     </button>
+                    <button
+                      onClick={() => deleteTodo(todo.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2"
+                      style={{ color: "rgb(247, 111, 83)" }}
+                    >
+                      Delete
+                    </button>
                   </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => deleteTodo(todo.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-2 ml-2"
-                style={{ color: "rgb(247, 111, 83)" }}
-              >
-                Delete
-              </button>
+                </>
+              )}
             </li>
           ))}
         </ul>
