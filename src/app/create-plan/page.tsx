@@ -83,9 +83,9 @@ export default function CreatePlan() {
         planType: 'development',
       });
 
-      // Redirect to home with the new plan ID after a brief delay
+      // Redirect to home page with the new plan_id
       setTimeout(() => {
-        router.push(`/?plan_id=${newPlanId}`);
+        router.push(`/plan/${newPlanId}`);
       }, 1500);
     } catch (err) {
       console.error('Error creating plan:', err);

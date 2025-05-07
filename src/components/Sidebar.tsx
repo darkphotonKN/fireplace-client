@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import Logo from './Logo';
-import { usePlanId } from '@/hooks/usePlanId';
 
 // Interface for navigation items
 interface NavItem {
@@ -35,7 +35,8 @@ interface ApiResponse {
 }
 
 export default function Sidebar() {
-  const { planId, setPlanId } = usePlanId();
+  const pathname = usePathname();
+  const planId = pathname?.split('/plan/')?.[1] || '';
 
   // State to track dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -95,12 +96,6 @@ export default function Sidebar() {
     };
   }, []);
 
-  // Handle plan selection
-  const handlePlanClick = (planId: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    setPlanId(planId);
-  };
-
   // Create nav sections based on plans
   const navSections: NavSection[] = [
     {
@@ -109,7 +104,7 @@ export default function Sidebar() {
         .filter((plan) => plan.planType === 'learning')
         .map((plan) => ({
           name: plan.name,
-          href: `/?plan_id=${plan.id}`,
+          href: `/plan/${plan.id}`,
           isActive: plan.id === planId,
         })),
     },
@@ -119,7 +114,7 @@ export default function Sidebar() {
         .filter((plan) => plan.planType === 'development')
         .map((plan) => ({
           name: plan.name,
-          href: `/?plan_id=${plan.id}`,
+          href: `/plan/${plan.id}`,
           isActive: plan.id === planId,
         })),
     },
@@ -138,7 +133,9 @@ export default function Sidebar() {
         {/* Title with Logo */}
         <div className="flex items-center gap-2">
           <Logo />
-          <h1 className="text-3xl font-bold">Fireplace</h1>
+          <Link href="/">
+            <h1 className="text-3xl font-bold">Fireplace</h1>
+          </Link>
         </div>
 
         {/* Core List */}
@@ -161,11 +158,8 @@ export default function Sidebar() {
                 ) : (
                   section.items.map((item) => (
                     <li key={item.name}>
-                      <a
+                      <Link
                         href={item.href}
-                        onClick={(e) =>
-                          handlePlanClick(item.href.split('plan_id=')[1], e)
-                        }
                         className={`flex px-3 py-2 text-sm rounded-md ${
                           item.isActive
                             ? 'bg-opacity-30 font-medium'
@@ -181,7 +175,7 @@ export default function Sidebar() {
                         }}
                       >
                         {item.name}
-                      </a>
+                      </Link>
                     </li>
                   ))
                 )}
