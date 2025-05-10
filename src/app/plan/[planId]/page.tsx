@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import Todo from '@/components/Todo';
-import GitHub from '@/components/GitHub';
-import { useEffect, useState } from 'react';
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import Todo from "@/components/Todo";
+import GitHub from "@/components/GitHub";
+import { useEffect, useState } from "react";
 
 interface PlanData {
   id: string;
@@ -22,29 +22,29 @@ export default function PlanDetail({ params }: { params: { planId: string } }) {
   const { planId } = params;
   const [plan, setPlan] = useState<PlanData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadPlanData() {
       if (!planId) return;
 
       setIsLoading(true);
-      setError('');
+      setError("");
 
       try {
         const response = await fetch(
-          `http://localhost:6060/api/plans/${planId}`
+          `http://localhost:6060/api/plans/${planId}`,
         );
         const data: ApiResponse = await response.json();
 
         if (response.ok) {
           setPlan(data.result);
         } else {
-          setError(data.message || 'Failed to load plan');
+          setError(data.message || "Failed to load plan");
         }
       } catch (error) {
-        console.error('Error loading plan:', error);
-        setError('Failed to load plan data');
+        console.error("Error loading plan:", error);
+        setError("Failed to load plan data");
       } finally {
         setIsLoading(false);
       }
@@ -56,21 +56,18 @@ export default function PlanDetail({ params }: { params: { planId: string } }) {
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Welcome Section */}
+        {/* Title Section */}
         <div className="backdrop-blur-sm rounded-2xl p-8 shadow-lg bg-white/5 dark:bg-gray-900/10">
           <h1 className="text-4xl font-bold mb-2">
-            {isLoading
-              ? 'Loading...'
-              : error
-              ? 'Plan Details'
-              : plan?.name || 'Welcome back, Kranti.'}
+            {isLoading ? "Loading..." : error ? "Plan Details" : plan?.name}
           </h1>
           <p className="opacity-80">
             {isLoading
-              ? 'Loading plan details...'
+              ? "..."
               : error
-              ? error
-              : plan?.description || "Let's continue your development journey."}
+                ? error
+                : plan?.description ||
+                  "Let's continue your development journey."}
           </p>
         </div>
 
@@ -80,14 +77,13 @@ export default function PlanDetail({ params }: { params: { planId: string } }) {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <Card className="backdrop-blur-sm shadow-sm border-0">
               <h2 className="text-xl font-semibold p-6 pb-4">Tasks</h2>
-              <h3 className="text-lg font-medium p-6 pb-4">Daily</h3>
               <div className="p-6 pt-0">
                 <Todo />
               </div>
             </Card>
 
             <Card className="backdrop-blur-sm shadow-sm border-0">
-              <h2 className="text-xl font-semibold p-6 pb-4">Quick Notes</h2>
+              <h2 className="text-xl font-semibold p-6 pb-4">Notes</h2>
               <div className="space-y-3 p-6 pt-0">
                 <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 rounded-lg">
                   <p className="text-sm">

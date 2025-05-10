@@ -1,19 +1,19 @@
-import type { Metadata } from 'next';
-import { Merriweather } from 'next/font/google';
-import './globals.css';
-import Sidebar from '@/components/Sidebar';
+import type { Metadata } from "next";
+import { Merriweather } from "next/font/google";
+import "./globals.css";
+import Sidebar from "@/components/Sidebar";
 
 const merriweather = Merriweather({
-  weight: ['300', '400', '700', '900'],
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-merriweather',
+  weight: ["300", "400", "700", "900"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-merriweather",
 });
 
 export const metadata: Metadata = {
-  title: 'Flow - Your Learning & Development Hub',
+  title: "Flow - Your Learning & Development Hub",
   description:
-    'Organize your learning journey and development projects in one place',
+    "Organize your learning journey and development projects in one place",
 };
 
 export default function RootLayout({

@@ -7,6 +7,7 @@ export interface ChecklistItem {
   id: string;
   description: string;
   done: boolean;
+  scheduledTime?: string; // ISO date string for scheduled items
 }
 
 export interface ChecklistResponse {
@@ -41,10 +42,11 @@ export interface ChecklistSuggestionResponse {
  * Fetch all checklist items for the specified plan
  */
 export const fetchChecklist = async (
-  planId: string
+  planId: string,
+  scope: 'daily' | 'longterm' = 'daily'
 ): Promise<ChecklistResponse> => {
   const response = await fetch(
-    `${API_BASE_URL}/api/plans/${planId}/checklists`
+    `${API_BASE_URL}/api/plans/${planId}/checklists?scope=${scope}`
   );
 
   if (!response.ok) {
@@ -59,7 +61,8 @@ export const fetchChecklist = async (
  */
 export const createChecklistItem = async (
   description: string,
-  planId: string
+  planId: string,
+  scope: 'daily' | 'longterm' = 'daily'
 ): Promise<ChecklistItem> => {
   const response = await fetch(
     `${API_BASE_URL}/api/plans/${planId}/checklists`,
@@ -68,7 +71,7 @@ export const createChecklistItem = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ description }),
+      body: JSON.stringify({ description, scope }),
     }
   );
 
@@ -87,11 +90,12 @@ export const createChecklistItem = async (
 export const updateChecklistItem = async (
   id: string,
   updates: UpdateChecklistItemRequest,
-  planId: string
+  planId: string,
+  scope: 'daily' | 'longterm' = 'daily'
 ): Promise<UpdateChecklistItemResponse> => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}`,
+      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}?scope=${scope}`,
       {
         method: 'PATCH',
         headers: {
@@ -120,11 +124,12 @@ export const updateChecklistItem = async (
  */
 export const deleteChecklistItem = async (
   id: string,
-  planId: string
+  planId: string,
+  scope: 'daily' | 'longterm' = 'daily'
 ): Promise<DeleteChecklistItemResponse> => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}`,
+      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}?scope=${scope}`,
       {
         method: 'DELETE',
         headers: {
@@ -144,11 +149,12 @@ export const deleteChecklistItem = async (
  * Get an AI-generated checklist item suggestion
  */
 export const getChecklistSuggestion = async (
-  planId: string
+  planId: string,
+  scope: 'daily' | 'longterm' = 'daily'
 ): Promise<ChecklistSuggestionResponse> => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/insights/checklist-suggestion?plan_id=${planId}`
+      `${API_BASE_URL}/api/insights/checklist-suggestion?plan_id=${planId}&scope=${scope}`
     );
 
     if (!response.ok) {
@@ -166,5 +172,40 @@ export const getChecklistSuggestion = async (
       result: 'Review your current project priorities',
       statusCode: 200,
     };
+  }
+};
+
+/**
+ * Schedule a checklist item
+ */
+export const scheduleChecklistItem = async (
+  id: string,
+  planId: string,
+  scheduleTime: Date,
+  scope: 'daily' | 'longterm' = 'daily'
+): Promise<UpdateChecklistItemResponse> => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/plans/${planId}/checklists/${id}/schedule?scope=${scope}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ scheduledTime: scheduleTime.toISOString() }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to schedule checklist item: ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    return { result: 'success', item: data };
+  } catch (err) {
+    console.error('Failed to schedule checklist item:', err);
+    return { result: 'failure' };
   }
 };
