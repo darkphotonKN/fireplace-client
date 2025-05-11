@@ -46,6 +46,12 @@ export interface ChecklistSuggestionResponse {
   statusCode: number;
 }
 
+export interface DailyInsightsResponse {
+  result: string[];
+  message: string;
+  statusCode: number;
+}
+
 /**
  * Fetch all checklist items for the specified plan
  */
@@ -215,5 +221,32 @@ export const scheduleChecklistItem = async (
   } catch (err) {
     console.error('Failed to schedule checklist item:', err);
     return { result: 'failure' };
+  }
+};
+
+/**
+ * Get daily insights suggestions based on long-term items
+ */
+export const getDailyInsights = async (
+  planId: string
+): Promise<DailyInsightsResponse> => {
+  try {
+    const response = await fetch(
+      `${config.apiBaseUrl}/api/insights/checklist-suggestion-daily?plan_id=${planId}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to get daily insights: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get daily insights:', error);
+    // Return a fallback suggestion if the API fails
+    return {
+      message: 'Failed to generate insights',
+      result: [],
+      statusCode: 200,
+    };
   }
 };
