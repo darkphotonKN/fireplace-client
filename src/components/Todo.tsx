@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { useState, useEffect, useRef } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   fetchChecklist,
   createChecklistItem,
@@ -10,10 +10,10 @@ import {
   scheduleChecklistItem,
   ChecklistItem,
   getChecklistSuggestion,
-} from '@/services/api';
-import { useParams } from 'next/navigation';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+} from "@/services/api";
+import { useParams } from "next/navigation";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 export default function Todo() {
   const params = useParams();
@@ -23,13 +23,13 @@ export default function Todo() {
   const [error, setError] = useState<string | null>(null);
 
   // Task type state (daily or longterm)
-  const [taskType, setTaskType] = useState<'daily' | 'longterm'>('daily');
+  const [taskType, setTaskType] = useState<"daily" | "longterm">("daily");
 
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
+  const [editText, setEditText] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,14 +40,14 @@ export default function Todo() {
 
   // AI suggestion state
   const [suggestion, setSuggestion] = useState<string | null>(null);
-  const [displaySuggestion, setDisplaySuggestion] = useState('');
+  const [displaySuggestion, setDisplaySuggestion] = useState("");
   const [isSuggestionTyping, setIsSuggestionTyping] = useState(false);
   const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
 
   // Typing animation state
   const [isTyping, setIsTyping] = useState(false);
   const [typingIndex, setTypingIndex] = useState(0);
-  const [fullText, setFullText] = useState('');
+  const [fullText, setFullText] = useState("");
   const typingSpeed = 15; // milliseconds per character (faster)
 
   // New todo animation state
@@ -64,8 +64,8 @@ export default function Todo() {
         setTodos(response.result || []);
         setError(null);
       } catch (error) {
-        console.error('Failed to fetch checklist items:', error);
-        setError('Failed to load tasks. Please try again later.');
+        console.error("Failed to fetch checklist items:", error);
+        setError("Failed to load tasks. Please try again later.");
         setTodos([]);
       } finally {
         setLoading(false);
@@ -99,7 +99,7 @@ export default function Todo() {
     if (!isSuggestionTyping || !suggestion) return;
 
     let currentIndex = 0;
-    setDisplaySuggestion('');
+    setDisplaySuggestion("");
 
     const interval = setInterval(() => {
       if (currentIndex < suggestion.length) {
@@ -131,8 +131,8 @@ export default function Todo() {
     const newDoneStatus = !todoToToggle.done;
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, done: newDoneStatus } : todo
-      )
+        todo.id === id ? { ...todo, done: newDoneStatus } : todo,
+      ),
     );
 
     try {
@@ -141,26 +141,26 @@ export default function Todo() {
         id,
         { done: newDoneStatus },
         planId,
-        taskType
+        taskType,
       );
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
-            todo.id === id ? { ...todo, done: todoToToggle.done } : todo
-          )
+            todo.id === id ? { ...todo, done: todoToToggle.done } : todo,
+          ),
         );
-        setError('Failed to update task status. Please try again.');
+        setError("Failed to update task status. Please try again.");
       }
     } catch (error) {
-      console.error('Error toggling todo:', error);
+      console.error("Error toggling todo:", error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, done: todoToToggle.done } : todo
-        )
+          todo.id === id ? { ...todo, done: todoToToggle.done } : todo,
+        ),
       );
-      setError('Failed to update task status. Please try again.');
+      setError("Failed to update task status. Please try again.");
     }
   };
 
@@ -168,7 +168,7 @@ export default function Todo() {
   const startScheduling = (todo: ChecklistItem) => {
     setSchedulingId(todo.id);
     setScheduleDate(
-      todo.scheduledTime ? new Date(todo.scheduledTime) : new Date()
+      todo.scheduledTime ? new Date(todo.scheduledTime) : new Date(),
     );
   };
 
@@ -195,8 +195,8 @@ export default function Todo() {
       todos.map((todo) =>
         todo.id === schedulingId
           ? { ...todo, scheduledTime: scheduleDate.toISOString() }
-          : todo
-      )
+          : todo,
+      ),
     );
 
     try {
@@ -205,31 +205,31 @@ export default function Todo() {
         schedulingId,
         planId,
         scheduleDate,
-        taskType
+        taskType,
       );
 
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
             todo.id === schedulingId
               ? { ...todo, scheduledTime: originalScheduledTime }
-              : todo
-          )
+              : todo,
+          ),
         );
-        setError('Failed to schedule task. Please try again.');
+        setError("Failed to schedule task. Please try again.");
       }
     } catch (error) {
-      console.error('Error scheduling todo:', error);
+      console.error("Error scheduling todo:", error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
           todo.id === schedulingId
             ? { ...todo, scheduledTime: originalScheduledTime }
-            : todo
-        )
+            : todo,
+        ),
       );
-      setError('Failed to schedule task. Please try again.');
+      setError("Failed to schedule task. Please try again.");
     } finally {
       setIsScheduling(false);
       setSchedulingId(null);
@@ -246,7 +246,7 @@ export default function Todo() {
   // Cancel editing
   const cancelEditing = () => {
     setEditingId(null);
-    setEditText('');
+    setEditText("");
   };
 
   // Format date for display
@@ -262,8 +262,8 @@ export default function Todo() {
     const isTomorrow = date.toDateString() === tomorrow.toDateString();
 
     const timeString = date.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
+      hour: "numeric",
+      minute: "2-digit",
     });
 
     if (isToday) {
@@ -272,16 +272,16 @@ export default function Todo() {
       return `Tomorrow at ${timeString}`;
     } else {
       return `${date.toLocaleDateString([], {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
+        weekday: "short",
+        month: "short",
+        day: "numeric",
       })} at ${timeString}`;
     }
   };
 
   // Update todo description
   const updateTodoDescription = async (id: string) => {
-    if (editText.trim() === '') return;
+    if (editText.trim() === "") return;
 
     // Find the original todo
     const originalTodo = todos.find((todo) => todo.id === id);
@@ -296,8 +296,8 @@ export default function Todo() {
 
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, description: updatedText } : todo
-      )
+        todo.id === id ? { ...todo, description: updatedText } : todo,
+      ),
     );
 
     try {
@@ -308,38 +308,38 @@ export default function Todo() {
           description: editText.trim(),
         },
         planId,
-        taskType
+        taskType,
       );
 
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
-            todo.id === id ? { ...todo, description: originalText } : todo
-          )
+            todo.id === id ? { ...todo, description: originalText } : todo,
+          ),
         );
-        setError('Failed to update task. Please try again.');
+        setError("Failed to update task. Please try again.");
       }
     } catch (error) {
-      console.error('Error updating todo description:', error);
+      console.error("Error updating todo description:", error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, description: originalText } : todo
-        )
+          todo.id === id ? { ...todo, description: originalText } : todo,
+        ),
       );
-      setError('Failed to update task. Please try again.');
+      setError("Failed to update task. Please try again.");
     } finally {
       setIsUpdating(false);
       setEditingId(null);
-      setEditText('');
+      setEditText("");
     }
   };
 
   // Add a new todo
   const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTodo.trim() === '') return;
+    if (newTodo.trim() === "") return;
 
     try {
       setIsSubmitting(true);
@@ -360,24 +360,24 @@ export default function Todo() {
       const newItem = await createChecklistItem(
         newTodo.trim(),
         planId,
-        taskType
+        taskType,
       );
 
       // update the newly created todo with the one from the API to sync the id
       setTodos(
         optimisticUpdatedTodos.map((todo) =>
-          todo.id === tempId ? newItem : todo
-        )
+          todo.id === tempId ? newItem : todo,
+        ),
       );
 
-      setNewTodo('');
+      setNewTodo("");
       setError(null);
       // Clear suggestion after adding a todo
       setSuggestion(null);
-      setDisplaySuggestion('');
+      setDisplaySuggestion("");
     } catch (error) {
-      console.error('Failed to create checklist item:', error);
-      setError('Failed to add task. Please try again.');
+      console.error("Failed to create checklist item:", error);
+      setError("Failed to add task. Please try again.");
 
       // Create a local ID for the fallback item
       const fallbackId = `fallback_${Date.now()}`;
@@ -389,7 +389,7 @@ export default function Todo() {
         done: false,
       };
       setTodos([...todos, fallbackItem]);
-      setNewTodo('');
+      setNewTodo("");
 
       // Add animation for the fallback item
       setNewTodoAnimations((prev) => ({
@@ -419,11 +419,11 @@ export default function Todo() {
 
       // Start typing animation for the suggestion
       setSuggestion(response.result);
-      setDisplaySuggestion('');
+      setDisplaySuggestion("");
       setIsSuggestionTyping(true);
     } catch (error) {
-      console.error('Failed to get AI suggestion:', error);
-      setError('Failed to get AI suggestion. Please try again.');
+      console.error("Failed to get AI suggestion:", error);
+      setError("Failed to get AI suggestion. Please try again.");
     } finally {
       setIsFetchingSuggestion(false);
     }
@@ -433,16 +433,16 @@ export default function Todo() {
   const useSuggestion = () => {
     if (suggestion) {
       // Clear current input and prepare for typing animation
-      setNewTodo('');
+      setNewTodo("");
       setFullText(suggestion);
       setTypingIndex(0);
       setIsTyping(true);
       setSuggestion(null);
-      setDisplaySuggestion('');
+      setDisplaySuggestion("");
     }
   };
 
-  console.log('@Debug todos:', todos);
+  console.log("@Debug todos:", todos);
 
   // Delete a todo
   const deleteTodo = async (id: string) => {
@@ -455,16 +455,16 @@ export default function Todo() {
 
     try {
       const response = await deleteChecklistItem(id, planId, taskType);
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Restore if deletion failed
         setTodos((prevTodos) => [...prevTodos, todoToDelete]);
-        setError('Failed to delete task. Please try again.');
+        setError("Failed to delete task. Please try again.");
       }
     } catch (error) {
-      console.error('Error deleting todo:', error);
+      console.error("Error deleting todo:", error);
       // Restore if exception
       setTodos((prevTodos) => [...prevTodos, todoToDelete]);
-      setError('Failed to delete task. Please try again.');
+      setError("Failed to delete task. Please try again.");
     }
   };
 
@@ -477,26 +477,26 @@ export default function Todo() {
       {/* Section Title with Task Type Switcher */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold">
-          {taskType === 'daily' ? 'Daily' : 'Long-term'}
+          {taskType === "daily" ? "Daily" : "Long-term"}
         </h2>
         <div className="flex items-center gap-3 text-sm">
           <button
-            onClick={() => setTaskType('daily')}
+            onClick={() => setTaskType("daily")}
             className={`transition-colors hover:opacity-80 ${
-              taskType === 'daily' ? 'font-medium' : 'opacity-60'
+              taskType === "daily" ? "font-medium" : "opacity-60"
             }`}
-            style={{ color: taskType === 'daily' ? 'rgb(247, 111, 83)' : '' }}
+            style={{ color: taskType === "daily" ? "rgb(247, 111, 83)" : "" }}
           >
             Daily
           </button>
           <span className="opacity-30">|</span>
           <button
-            onClick={() => setTaskType('longterm')}
+            onClick={() => setTaskType("longterm")}
             className={`transition-colors hover:opacity-80 ${
-              taskType === 'longterm' ? 'font-medium' : 'opacity-60'
+              taskType === "longterm" ? "font-medium" : "opacity-60"
             }`}
             style={{
-              color: taskType === 'longterm' ? 'rgb(247, 111, 83)' : '',
+              color: taskType === "longterm" ? "rgb(247, 111, 83)" : "",
             }}
           >
             Long-term
@@ -517,19 +517,19 @@ export default function Todo() {
             value={newTodo}
             onChange={(e) => setNewTodo(e.target.value)}
             placeholder={`Add a new ${
-              taskType === 'daily' ? 'task' : 'goal'
+              taskType === "daily" ? "task" : "goal"
             }...`}
             className="flex-1 p-2 border rounded"
-            style={{ backgroundColor: 'transparent' }}
+            style={{ backgroundColor: "transparent" }}
             disabled={isSubmitting || isTyping}
           />
           <button
             type="submit"
             className="px-4 py-2 rounded bg-white/5 dark:bg-gray-900/10"
-            style={{ color: 'rgb(247, 111, 83)' }}
+            style={{ color: "rgb(247, 111, 83)" }}
             disabled={isSubmitting || isTyping}
           >
-            {isSubmitting ? 'Adding...' : 'Add'}
+            {isSubmitting ? "Adding..." : "Add"}
           </button>
         </form>
 
@@ -540,7 +540,7 @@ export default function Todo() {
             className="text-sm text-gray-600 flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5"
           >
             {isFetchingSuggestion ? (
-              'Getting suggestion...'
+              "Getting suggestion..."
             ) : (
               <>
                 <svg
@@ -551,7 +551,7 @@ export default function Todo() {
                 >
                   <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-.707 9.293a1 1 0 0 1 0 1.414 1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L9 10.586l3.293-3.293a1 1 0 0 1 1.414 1.414l-4 4z" />
                 </svg>
-                Get AI suggestion
+                Get Suggestion
               </>
             )}
           </button>
@@ -597,9 +597,9 @@ export default function Todo() {
       {todos.length === 0 ? (
         <div className="py-4 text-center">
           <p className="text-gray-500 text-sm">
-            {taskType === 'daily'
-              ? 'No daily tasks yet. Add one above!'
-              : 'No long-term goals yet. Add one above!'}
+            {taskType === "daily"
+              ? "No daily tasks yet. Add one above!"
+              : "No long-term goals yet. Add one above!"}
           </p>
         </div>
       ) : (
@@ -608,7 +608,7 @@ export default function Todo() {
             <li
               key={todo.id}
               className={`flex items-center justify-between group transition-all duration-200 ${
-                newTodoAnimations[todo.id] ? 'animate-fadeIn' : ''
+                newTodoAnimations[todo.id] ? "animate-fadeIn" : ""
               }`}
             >
               {editingId === todo.id ? (
@@ -625,16 +625,16 @@ export default function Todo() {
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                       className="flex-1 px-2 py-1 text-sm border rounded"
-                      style={{ backgroundColor: 'transparent' }}
+                      style={{ backgroundColor: "transparent" }}
                       disabled={isUpdating}
                     />
                     <button
                       onClick={() => updateTodoDescription(todo.id)}
                       className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
-                      style={{ color: 'rgb(247, 111, 83)' }}
+                      style={{ color: "rgb(247, 111, 83)" }}
                       disabled={isUpdating}
                     >
-                      {isUpdating ? 'Saving...' : 'Save'}
+                      {isUpdating ? "Saving..." : "Save"}
                     </button>
                     <button
                       onClick={cancelEditing}
@@ -655,7 +655,7 @@ export default function Todo() {
                   <div className="flex flex-1 flex-wrap space-x-2">
                     <label
                       className={`text-sm cursor-pointer flex-1 ${
-                        todo.done ? 'line-through opacity-70' : ''
+                        todo.done ? "line-through opacity-70" : ""
                       }`}
                     >
                       {todo.description}
@@ -675,10 +675,10 @@ export default function Todo() {
                       <button
                         onClick={scheduleTodo}
                         className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
-                        style={{ color: 'rgb(247, 111, 83)' }}
+                        style={{ color: "rgb(247, 111, 83)" }}
                         disabled={isScheduling || !scheduleDate}
                       >
-                        {isScheduling ? 'Saving...' : 'Schedule'}
+                        {isScheduling ? "Saving..." : "Schedule"}
                       </button>
                       <button
                         onClick={cancelScheduling}
@@ -701,8 +701,8 @@ export default function Todo() {
                     <div className="flex flex-col flex-1">
                       <label
                         className={`text-sm cursor-pointer flex-1 ${
-                          todo.done ? 'line-through opacity-70' : ''
-                        } ${newTodoAnimations[todo.id] ? 'relative' : ''}`}
+                          todo.done ? "line-through opacity-70" : ""
+                        } ${newTodoAnimations[todo.id] ? "relative" : ""}`}
                       >
                         {todo.description}
                         {newTodoAnimations[todo.id] && (
@@ -737,8 +737,8 @@ export default function Todo() {
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                       style={{
                         color: todo.scheduledTime
-                          ? 'rgb(247, 111, 83)'
-                          : 'rgb(150, 150, 150)',
+                          ? "rgb(247, 111, 83)"
+                          : "rgb(150, 150, 150)",
                       }}
                     >
                       <svg
@@ -760,7 +760,7 @@ export default function Todo() {
                       onClick={() => startEditing(todo)}
                       title="Edit task"
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                      style={{ color: 'rgb(247, 111, 83)' }}
+                      style={{ color: "rgb(247, 111, 83)" }}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -777,7 +777,7 @@ export default function Todo() {
                       onClick={() => deleteTodo(todo.id)}
                       title="Delete task"
                       className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                      style={{ color: 'rgb(247, 111, 83)' }}
+                      style={{ color: "rgb(247, 111, 83)" }}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
