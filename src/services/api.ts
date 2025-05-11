@@ -3,11 +3,18 @@ import { config } from '@/config/environment';
 // API base URL from environment config
 const API_BASE_URL = config.apiBaseUrl;
 
+export const scope = {
+  longterm: 'longterm',
+  daily: 'daily',
+} as const;
+export type ScopeEnum = (typeof scope)[keyof typeof scope];
+
 export interface ChecklistItem {
   id: string;
   description: string;
   done: boolean;
   scheduledTime?: string; // ISO date string for scheduled items
+  scope?: ScopeEnum;
 }
 
 export interface ChecklistResponse {
@@ -21,6 +28,7 @@ export interface ChecklistCreateRequest {
 export interface UpdateChecklistItemRequest {
   description?: string;
   done?: boolean;
+  scope?: ScopeEnum;
 }
 
 export interface DeleteChecklistItemResponse {

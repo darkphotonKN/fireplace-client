@@ -10,6 +10,8 @@ import {
   scheduleChecklistItem,
   ChecklistItem,
   getChecklistSuggestion,
+  scope,
+  ScopeEnum,
 } from "@/services/api";
 import { useParams } from "next/navigation";
 import DatePicker from "react-datepicker";
@@ -237,13 +239,11 @@ export default function Todo() {
     }
   };
 
-  // Start editing a todo
   const startEditing = (todo: ChecklistItem) => {
     setEditingId(todo.id);
     setEditText(todo.description);
   };
 
-  // Cancel editing
   const cancelEditing = () => {
     setEditingId(null);
     setEditText("");
@@ -276,6 +276,24 @@ export default function Todo() {
         month: "short",
         day: "numeric",
       })} at ${timeString}`;
+    }
+  };
+
+  const handleMoveItem = async (id: string, scope: ScopeEnum) => {
+    // optimisitic update
+    const oldTodos = todos;
+    const newTodos = todos.filter((todo) => todo.id !== id);
+    setTodos(newTodos);
+    setEditingId(null);
+
+    try {
+      const res = await updateChecklistItem(id, { scope }, planId, scope);
+      console.log("res:", res);
+    } catch (error) {
+      // undo optimistic update
+      console.error(`Error moving item to ${scope}:`, error);
+      setTodos(oldTodos);
+      setError(`Error when attempting to move item to ${scope}.`);
     }
   };
 
@@ -482,9 +500,8 @@ export default function Todo() {
         <div className="flex items-center gap-3 text-sm">
           <button
             onClick={() => setTaskType("daily")}
-            className={`transition-colors hover:opacity-80 ${
-              taskType === "daily" ? "font-medium" : "opacity-60"
-            }`}
+            className={`transition-colors hover:opacity-80 ${taskType === "daily" ? "font-medium" : "opacity-60"
+              }`}
             style={{ color: taskType === "daily" ? "rgb(247, 111, 83)" : "" }}
           >
             Daily
@@ -492,9 +509,8 @@ export default function Todo() {
           <span className="opacity-30">|</span>
           <button
             onClick={() => setTaskType("longterm")}
-            className={`transition-colors hover:opacity-80 ${
-              taskType === "longterm" ? "font-medium" : "opacity-60"
-            }`}
+            className={`transition-colors hover:opacity-80 ${taskType === "longterm" ? "font-medium" : "opacity-60"
+              }`}
             style={{
               color: taskType === "longterm" ? "rgb(247, 111, 83)" : "",
             }}
@@ -516,9 +532,8 @@ export default function Todo() {
             type="text"
             value={newTodo}
             onChange={(e) => setNewTodo(e.target.value)}
-            placeholder={`Add a new ${
-              taskType === "daily" ? "task" : "goal"
-            }...`}
+            placeholder={`Add a new ${taskType === "daily" ? "task" : "goal"
+              }...`}
             className="flex-1 p-2 border rounded"
             style={{ backgroundColor: "transparent" }}
             disabled={isSubmitting || isTyping}
@@ -607,12 +622,46 @@ export default function Todo() {
           {todos.map((todo) => (
             <li
               key={todo.id}
-              className={`flex items-center justify-between group transition-all duration-200 ${
-                newTodoAnimations[todo.id] ? "animate-fadeIn" : ""
-              }`}
+              className={`relative flex items-center justify-between group transition-all duration-200 ${newTodoAnimations[todo.id] ? "animate-fadeIn" : ""
+                }`}
             >
+              {/* show editing input during edit mode */}
               {editingId === todo.id ? (
                 <div className="flex items-center space-x-3 flex-1">
+                  {/* show edit tooltip during edit mode */}
+                  <div className="absolute top-[-30px] right-0 text-xs bg-white/5 rounded-md px-2.5 py-1 shadow-sm">
+                    {todo?.scope === scope.longterm ? (
+                      <button
+                        onClick={() => handleMoveItem(todo.id, scope.daily)}
+                        className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="w-3.5 h-3.5 mr-1.5"
+                        >
+                          <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
+                        </svg>
+                        Move to Daily
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleMoveItem(todo.id, scope.longterm)}
+                        className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          className="w-3.5 h-3.5 mr-1.5"
+                        >
+                          <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
+                        </svg>
+                        Move to Long-term
+                      </button>
+                    )}
+                  </div>
                   <Checkbox
                     id={`todo-${todo.id}`}
                     checked={todo.done}
@@ -630,7 +679,7 @@ export default function Todo() {
                     />
                     <button
                       onClick={() => updateTodoDescription(todo.id)}
-                      className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
+                      className="px-2 py-1 text-xs rounded bg-white/5"
                       style={{ color: "rgb(247, 111, 83)" }}
                       disabled={isUpdating}
                     >
@@ -654,9 +703,8 @@ export default function Todo() {
                   />
                   <div className="flex flex-1 flex-wrap space-x-2">
                     <label
-                      className={`text-sm cursor-pointer flex-1 ${
-                        todo.done ? "line-through opacity-70" : ""
-                      }`}
+                      className={`text-sm cursor-pointer flex-1 ${todo.done ? "line-through opacity-70" : ""
+                        }`}
                     >
                       {todo.description}
                     </label>
@@ -700,9 +748,8 @@ export default function Todo() {
                     />
                     <div className="flex flex-col flex-1">
                       <label
-                        className={`text-sm cursor-pointer flex-1 ${
-                          todo.done ? "line-through opacity-70" : ""
-                        } ${newTodoAnimations[todo.id] ? "relative" : ""}`}
+                        className={`text-sm cursor-pointer flex-1 ${todo.done ? "line-through opacity-70" : ""
+                          } ${newTodoAnimations[todo.id] ? "relative" : ""}`}
                       >
                         {todo.description}
                         {newTodoAnimations[todo.id] && (
@@ -729,7 +776,7 @@ export default function Todo() {
                     </div>
                   </div>
 
-                  <div className="flex space-x-1">
+                  <div className="absolute right-[0] flex space-x-1">
                     {/* Schedule Icon */}
                     <button
                       onClick={() => startScheduling(todo)}
