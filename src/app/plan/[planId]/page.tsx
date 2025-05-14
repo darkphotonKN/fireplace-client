@@ -1,50 +1,36 @@
-"use client";
+'use client';
 
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import Todo from "@/components/Todo";
-import GitHub from "@/components/GitHub";
-import { useEffect, useState } from "react";
-
-interface PlanData {
-  id: string;
-  name: string;
-  description: string;
-}
-
-interface ApiResponse {
-  statusCode: number;
-  message: string;
-  result: PlanData;
-}
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import Todo from '@/components/Todo';
+import GitHub from '@/components/GitHub';
+import { useEffect, useState } from 'react';
+import { fetchPlan, PlanDetailData } from '@/services/api';
 
 export default function PlanDetail({ params }: { params: { planId: string } }) {
   const { planId } = params;
-  const [plan, setPlan] = useState<PlanData | null>(null);
+  const [plan, setPlan] = useState<PlanDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function loadPlanData() {
       if (!planId) return;
 
       setIsLoading(true);
-      setError("");
+      setError('');
 
       try {
-        const response = await fetch(
-          `http://localhost:6060/api/plans/${planId}`,
-        );
-        const data: ApiResponse = await response.json();
+        const response = await fetchPlan(planId);
 
-        if (response.ok) {
-          setPlan(data.result);
+        if (response.result) {
+          setPlan(response.result);
         } else {
-          setError(data.message || "Failed to load plan");
+          setError(response.message || 'Failed to load plan');
         }
       } catch (error) {
-        console.error("Error loading plan:", error);
-        setError("Failed to load plan data");
+        console.error('Error loading plan:', error);
+        setError('Failed to load plan data');
       } finally {
         setIsLoading(false);
       }
@@ -55,20 +41,51 @@ export default function PlanDetail({ params }: { params: { planId: string } }) {
 
   return (
     <main className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="relative max-w-7xl mx-auto space-y-8">
         {/* Title Section */}
         <div className="backdrop-blur-sm rounded-2xl p-8 shadow-lg bg-white/5 dark:bg-gray-900/10">
           <h1 className="text-4xl font-bold mb-2">
-            {isLoading ? "Loading..." : error ? "Plan Details" : plan?.name}
+            {isLoading ? 'Loading...' : error ? 'Plan Details' : plan?.name}
           </h1>
           <p className="opacity-80">
             {isLoading
-              ? "..."
+              ? '...'
               : error
-                ? error
-                : plan?.description ||
-                  "Let's continue your development journey."}
+              ? error
+              : plan?.description || "Let's continue your development journey."}
           </p>
+
+          <div className="absolute bottom-[20px] right-[20px] z-10">
+            <div className="relative group">
+              <button
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                aria-label="Information about daily suggestions"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="w-4 h-4"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20">
+                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
+                  <p className="text-sm text-white mb-1">{plan?.focus}</p>
+                  <p className="text-xs text-gray-400">
+                    Your focus is one of the primary components that drive the
+                    insights and suggestions provided for your plan.
+                  </p>
+                </div>
+                <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 bg-white/5 border-l border-t border-white/10 transform -rotate-45"></div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Main Grid - Flexible Layout */}

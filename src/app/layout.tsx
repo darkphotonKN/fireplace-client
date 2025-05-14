@@ -1,19 +1,20 @@
-import type { Metadata } from "next";
-import { Merriweather } from "next/font/google";
-import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import type { Metadata } from 'next';
+import { Merriweather } from 'next/font/google';
+import './globals.css';
+import Sidebar from '@/components/Sidebar';
+import UserProfile from '@/components/UserProfile';
 
 const merriweather = Merriweather({
-  weight: ["300", "400", "700", "900"],
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-merriweather",
+  weight: ['300', '400', '700', '900'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-merriweather',
 });
 
 export const metadata: Metadata = {
-  title: "Flow - Your Learning & Development Hub",
+  title: 'Flow - Your Learning & Development Hub',
   description:
-    "Organize your learning journey and development projects in one place",
+    'Organize your learning journey and development projects in one place',
 };
 
 export default function RootLayout({
@@ -30,9 +31,15 @@ export default function RootLayout({
             <Sidebar />
 
             {/* Main content with left margin to accommodate sidebar */}
-            <main className="ml-64 w-full p-8">
-              <div className="max-w-7xl mx-auto">{children}</div>
-            </main>
+            <div className="ml-64 w-full">
+              <div className="absolute top-4 right-8">
+                <UserProfile />
+              </div>
+              {/* Main content */}
+              <main className="p-8">
+                <div className="max-w-7xl mx-auto">{children}</div>
+              </main>
+            </div>
           </div>
         </div>
       </body>

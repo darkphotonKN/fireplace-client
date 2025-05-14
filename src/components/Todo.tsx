@@ -61,10 +61,7 @@ export default function Todo() {
   // Daily insights state
   const [dailyInsights, setDailyInsights] = useState<string[]>([]);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  const [displayedInsights, setDisplayedInsights] = useState<string[]>([]);
-  const [isTypingInsights, setIsTypingInsights] = useState(false);
-  const [currentInsightIndex, setCurrentInsightIndex] = useState(0);
-  const [currentCharIndex, setCurrentCharIndex] = useState(0);
+  const [visibleInsights, setVisibleInsights] = useState<boolean[]>([]);
   const [showInsights, setShowInsights] = useState(true);
 
   // Load show/hide preference from localStorage on mount
@@ -79,6 +76,25 @@ export default function Todo() {
   useEffect(() => {
     localStorage.setItem('showDailyInsights', String(showInsights));
   }, [showInsights]);
+
+  // Handle sequential fade-up animation for insights
+  useEffect(() => {
+    if (!dailyInsights.length) return;
+
+    // Initialize all insights as hidden
+    setVisibleInsights(new Array(dailyInsights.length).fill(false));
+
+    // Show each insight with a delay
+    dailyInsights.forEach((_, index) => {
+      setTimeout(() => {
+        setVisibleInsights((prev) => {
+          const newState = [...prev];
+          newState[index] = true;
+          return newState;
+        });
+      }, index * 300); // 300ms delay between each insight
+    });
+  }, [dailyInsights]);
 
   // Fetch todos on component mount and when planId or taskType changes
   useEffect(() => {
@@ -520,84 +536,99 @@ export default function Todo() {
   // Fetch daily insights from API
   const fetchDailyInsights = async () => {
     try {
+      // First check if there are any long-term items
+      const longTermResponse = await fetchChecklist(planId, 'longterm');
+      if (!longTermResponse.result || longTermResponse.result.length === 0) {
+        // No long-term items, so no need to fetch insights
+        setDailyInsights([]);
+        setVisibleInsights([]);
+        return;
+      }
+
       setIsLoadingInsights(true);
       const response = await getDailyInsights(planId);
       if (response && response.result) {
         setDailyInsights(response.result);
-        // Initialize displayed insights with empty strings
-        setDisplayedInsights(response.result.map(() => ''));
-        // Start typing animation
-        if (response.result.length > 0) {
-          setIsTypingInsights(true);
-          setCurrentInsightIndex(0);
-          setCurrentCharIndex(0);
-        }
       } else {
         // Clear insights if API returns empty results
         setDailyInsights([]);
-        setDisplayedInsights([]);
+        setVisibleInsights([]);
       }
     } catch (error) {
       console.error('Failed to fetch daily insights:', error);
       // Clear insights on error
       setDailyInsights([]);
-      setDisplayedInsights([]);
+      setVisibleInsights([]);
     } finally {
       setIsLoadingInsights(false);
     }
   };
 
-  // Handle typing animation for insights
-  useEffect(() => {
-    if (!isTypingInsights || dailyInsights.length === 0) return;
-
-    const currentInsight = dailyInsights[currentInsightIndex];
-
-    if (currentCharIndex < currentInsight.length) {
-      // Still typing the current insight
-      const timeout = setTimeout(() => {
-        setDisplayedInsights((prev) => {
-          const updated = [...prev];
-          updated[currentInsightIndex] = currentInsight.substring(
-            0,
-            currentCharIndex + 1
-          );
-          return updated;
-        });
-        setCurrentCharIndex((prev) => prev + 1);
-      }, typingSpeed);
-
-      return () => clearTimeout(timeout);
-    } else {
-      // Finished typing current insight, move to next
-      if (currentInsightIndex < dailyInsights.length - 1) {
-        // Move to next insight
-        setTimeout(() => {
-          setCurrentInsightIndex((prev) => prev + 1);
-          setCurrentCharIndex(0);
-        }, 100); // Small pause between insights
-      } else {
-        // All insights typed
-        setIsTypingInsights(false);
-      }
-    }
-  }, [
-    isTypingInsights,
-    currentInsightIndex,
-    currentCharIndex,
-    dailyInsights,
-    typingSpeed,
-  ]);
-
   // Add insight as a new todo
-  const addInsightAsTodo = (description: string) => {
-    // Set the description and simulate submitting the form
-    setNewTodo(description);
-    // Use setTimeout to allow state to update
-    setTimeout(() => {
-      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-      addTodo(fakeEvent);
-    }, 10);
+  const addInsightAsTodo = async (description: string) => {
+    try {
+      // Create a temporary ID for the optimistic update
+      const tempId = `insight_${Date.now()}`;
+
+      // Create an optimistic todo item
+      const tempNewItem: ChecklistItem = {
+        id: tempId,
+        description: description,
+        done: false,
+      };
+
+      // Start animation for the new todo
+      setNewTodoAnimations((prev) => ({ ...prev, [tempId]: true }));
+
+      // Add to list with optimistic update
+      setTodos((prevTodos) => [...prevTodos, tempNewItem]);
+
+      // Actual API call
+      const newItem = await createChecklistItem(description, planId, taskType);
+
+      // Update the item with the real ID from the API
+      setTodos((prevTodos) =>
+        prevTodos.map((todo) => (todo.id === tempId ? newItem : todo))
+      );
+
+      // Remove the suggestion from the list to provide feedback that it was added
+      setDailyInsights((prevInsights) =>
+        prevInsights.filter((insight) => insight !== description)
+      );
+
+      // Clear errors if any
+      setError(null);
+    } catch (error) {
+      console.error('Failed to add suggested task:', error);
+      setError('Failed to add suggested task. Please try again.');
+
+      // Create a fallback ID for the item in case of API failure
+      const fallbackId = `fallback_${Date.now()}`;
+
+      // Add as a local item even if API fails
+      const fallbackItem = {
+        id: fallbackId,
+        description: description,
+        done: false,
+      };
+
+      setTodos((prevTodos) => [...prevTodos, fallbackItem]);
+
+      // Add animation for the fallback item
+      setNewTodoAnimations((prev) => ({
+        ...prev,
+        [fallbackId]: true,
+      }));
+
+      // Remove the animation after delay
+      setTimeout(() => {
+        setNewTodoAnimations((current) => {
+          const final = { ...current };
+          delete final[fallbackId];
+          return final;
+        });
+      }, 1000);
+    }
   };
 
   // Toggle insights visibility
@@ -972,68 +1003,132 @@ export default function Todo() {
         </ul>
       )}
 
-      {/* Daily Insights Section - moved to the bottom */}
+      {/* Daily Insights Section */}
       {taskType === 'daily' &&
+        todos.length > 0 &&
         (isLoadingInsights ? (
           <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium">Suggested Daily Tasks</h3>
-              <span className="text-xs text-gray-500">
-                Loading suggestions...
-              </span>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium">Suggested Daily Tasks</h3>
+                <div className="relative group">
+                  <button
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    aria-label="Information about daily suggestions"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
+                      <p className="text-sm text-white mb-1">
+                        Focus on what matters most to you
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Daily suggestions are driven by your long-term goals and
+                        priorities
+                      </p>
+                    </div>
+                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white/5 border-r border-b border-white/10 transform rotate-45"></div>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={toggleInsightsVisibility}
+                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                {showInsights ? 'Hide suggestions' : 'Show suggestions'}
+              </button>
             </div>
           </div>
-        ) : (
-          dailyInsights.length > 0 && (
-            <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
-              <div className="flex justify-between items-center mb-2">
+        ) : dailyInsights.length > 0 ? (
+          <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-2">
                 <h3 className="text-sm font-medium">Suggested Daily Tasks</h3>
-                <button
-                  onClick={toggleInsightsVisibility}
-                  className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                >
-                  {showInsights ? 'Hide suggestions' : 'Show suggestions'}
-                </button>
-              </div>
-
-              {showInsights && (
-                <div className="space-y-3 p-3 bg-white/5 dark:bg-gray-800/20 rounded-md">
-                  <div className="flex justify-end">
-                    <span className="text-xs text-gray-500">
-                      Based on long-term goals
-                    </span>
+                <div className="relative group">
+                  <button
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    aria-label="Information about daily suggestions"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
+                      <p className="text-sm text-white mb-1">
+                        Focus on what matters most to you
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Daily suggestions are driven by your long-term goals and
+                        priorities
+                      </p>
+                    </div>
+                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white/5 border-r border-b border-white/10 transform rotate-45"></div>
                   </div>
-
-                  <ul className="space-y-2">
-                    {dailyInsights.map((insight, index) => (
-                      <li
-                        key={`insight-${index}`}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="text-sm">
-                          {displayedInsights[index]}
-                          {isTypingInsights &&
-                            currentInsightIndex === index && (
-                              <span className="inline-block animate-pulse ml-0.5">
-                                |
-                              </span>
-                            )}
-                        </span>
-                        <button
-                          onClick={() => addInsightAsTodo(insight)}
-                          className="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 dark:hover:bg-gray-700/50"
-                          style={{ color: 'rgb(247, 111, 83)' }}
-                        >
-                          Add
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
                 </div>
-              )}
+              </div>
+              <button
+                onClick={toggleInsightsVisibility}
+                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              >
+                {showInsights ? 'Hide suggestions' : 'Show suggestions'}
+              </button>
             </div>
-          )
-        ))}
+
+            {showInsights && (
+              <div className="space-y-3 p-3 bg-white/5 dark:bg-gray-800/20 rounded-md">
+                <div className="flex justify-end">
+                  <span className="text-xs text-gray-500">
+                    Based on long-term goals
+                  </span>
+                </div>
+
+                <ul className="space-y-2">
+                  {dailyInsights.map((insight, index) => (
+                    <li
+                      key={`insight-${index}`}
+                      className={`flex items-center justify-between transition-all duration-500 ${
+                        visibleInsights[index]
+                          ? 'opacity-100 translate-y-0'
+                          : 'opacity-0 translate-y-2'
+                      }`}
+                    >
+                      <span className="text-sm text-gray-300">{insight}</span>
+                      <button
+                        onClick={() => addInsightAsTodo(insight)}
+                        className="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 dark:hover:bg-gray-700/50"
+                        style={{ color: 'rgb(247, 111, 83)' }}
+                      >
+                        Add
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : null)}
 
       <style jsx>{`
         @keyframes fadeIn {
