@@ -13,6 +13,10 @@ import {
   scope,
   ScopeEnum,
   getDailyInsights,
+  archiveChecklistItem,
+  fetchArchivedChecklist,
+  ChecklistResponse,
+  ChecklistSuggestionResponse,
 } from '@/services/api';
 import { useParams } from 'next/navigation';
 import DatePicker from 'react-datepicker';
@@ -25,8 +29,10 @@ export default function Todo() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Task type state (daily or longterm)
-  const [taskType, setTaskType] = useState<'daily' | 'longterm'>('daily');
+  // Task type state (daily, longterm, or archived)
+  const [taskType, setTaskType] = useState<'daily' | 'longterm' | 'archived'>(
+    'daily'
+  );
 
   const [newTodo, setNewTodo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,15 +60,22 @@ export default function Todo() {
   const typingSpeed = 15; // milliseconds per character (faster)
 
   // New todo animation state
-  const [newTodoAnimations, setNewTodoAnimations] = useState<{
-    [id: string]: boolean;
-  }>({});
+  const [newTodoAnimations, setNewTodoAnimations] = useState<
+    Record<string, boolean>
+  >({});
 
   // Daily insights state
   const [dailyInsights, setDailyInsights] = useState<string[]>([]);
-  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
-  const [visibleInsights, setVisibleInsights] = useState<boolean[]>([]);
   const [showInsights, setShowInsights] = useState(true);
+  const [visibleInsights, setVisibleInsights] = useState<boolean[]>([]);
+
+  // Archived state
+  const [archivedTodos, setArchivedTodos] = useState<ChecklistItem[]>([]);
+
+  // Settings state
+  const [showSettings, setShowSettings] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [refreshDailyTasks, setRefreshDailyTasks] = useState(true);
 
   // Load show/hide preference from localStorage on mount
   useEffect(() => {
@@ -96,12 +109,35 @@ export default function Todo() {
     });
   }, [dailyInsights]);
 
+  // Load refresh preference from localStorage on mount
+  useEffect(() => {
+    const savedPreference = localStorage.getItem('refreshDailyTasks');
+    if (savedPreference !== null) {
+      setRefreshDailyTasks(savedPreference === 'true');
+    }
+  }, []);
+
+  // Save refresh preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('refreshDailyTasks', String(refreshDailyTasks));
+  }, [refreshDailyTasks]);
+
   // Fetch todos on component mount and when planId or taskType changes
   useEffect(() => {
     const loadTodos = async () => {
       try {
         setLoading(true);
-        const response = await fetchChecklist(planId, taskType);
+        let response: ChecklistResponse;
+
+        if (taskType === 'archived') {
+          response = await fetchArchivedChecklist(planId, 'daily');
+        } else {
+          response = await fetchChecklist(
+            planId,
+            taskType as 'daily' | 'longterm'
+          );
+        }
+
         setTodos(response.result || []);
         setError(null);
       } catch (error) {
@@ -122,7 +158,7 @@ export default function Todo() {
       // Clear insights when not in daily mode
       setDailyInsights([]);
     }
-  }, [planId, taskType]); // Re-fetch when planId or taskType changes
+  }, [planId, taskType]);
 
   // Handle typing animation for input
   useEffect(() => {
@@ -190,7 +226,7 @@ export default function Todo() {
         id,
         { done: newDoneStatus },
         planId,
-        taskType
+        taskType as 'daily' | 'longterm'
       );
       if (response.result !== 'success') {
         // Revert if failed
@@ -254,7 +290,7 @@ export default function Todo() {
         schedulingId,
         planId,
         scheduleDate,
-        taskType
+        taskType as 'daily' | 'longterm'
       );
 
       if (response.result !== 'success') {
@@ -373,7 +409,7 @@ export default function Todo() {
           description: editText.trim(),
         },
         planId,
-        taskType
+        taskType as 'daily' | 'longterm'
       );
 
       if (response.result !== 'success') {
@@ -404,72 +440,31 @@ export default function Todo() {
   // Add a new todo
   const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTodo.trim() === '') return;
+    if (!newTodo.trim() || isSubmitting || isTyping) return;
 
     try {
       setIsSubmitting(true);
-      // optimistic temp item
-      const tempId = `id_${Date.now()}`;
-      const tempNewItem: ChecklistItem = {
-        id: tempId,
-        description: newTodo,
-        done: false,
-      };
-
-      // Start animation for the new todo
-      setNewTodoAnimations((prev) => ({ ...prev, [tempId]: true }));
-
-      const optimisticUpdatedTodos = [...todos, tempNewItem];
-      setTodos(optimisticUpdatedTodos);
-
       const newItem = await createChecklistItem(
-        newTodo.trim(),
+        newTodo,
         planId,
-        taskType
+        taskType as 'daily' | 'longterm'
       );
-
-      // update the newly created todo with the one from the API to sync the id
-      setTodos(
-        optimisticUpdatedTodos.map((todo) =>
-          todo.id === tempId ? newItem : todo
-        )
-      );
-
+      setTodos((prev) => [...prev, newItem]);
       setNewTodo('');
-      setError(null);
-      // Clear suggestion after adding a todo
-      setSuggestion(null);
-      setDisplaySuggestion('');
-    } catch (error) {
-      console.error('Failed to create checklist item:', error);
-      setError('Failed to add task. Please try again.');
-
-      // Create a local ID for the fallback item
-      const fallbackId = `fallback_${Date.now()}`;
-
-      // Fallback: add item locally if API fails
-      const fallbackItem = {
-        id: fallbackId,
-        description: newTodo.trim(),
-        done: false,
-      };
-      setTodos([...todos, fallbackItem]);
-      setNewTodo('');
-
-      // Add animation for the fallback item
+      // Add animation for the new todo
       setNewTodoAnimations((prev) => ({
         ...prev,
-        [fallbackId]: true,
+        [newItem.id]: true,
       }));
-
-      // Remove animation after a delay
+      // Remove animation after 1 second
       setTimeout(() => {
-        setNewTodoAnimations((current) => {
-          const final = { ...current };
-          delete final[fallbackId];
-          return final;
-        });
+        setNewTodoAnimations((prev) => ({
+          ...prev,
+          [newItem.id]: false,
+        }));
       }, 1000);
+    } catch (error) {
+      console.error('Failed to add todo:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -477,18 +472,15 @@ export default function Todo() {
 
   // Get AI suggestion for a new todo
   const getAISuggestion = async () => {
+    if (isFetchingSuggestion || isTyping || isSuggestionTyping) return;
+
     try {
       setIsFetchingSuggestion(true);
-      setError(null);
-      const response = await getChecklistSuggestion(planId, taskType);
-
-      // Start typing animation for the suggestion
+      const response: ChecklistSuggestionResponse =
+        await getChecklistSuggestion(planId, taskType as 'daily' | 'longterm');
       setSuggestion(response.result);
-      setDisplaySuggestion('');
-      setIsSuggestionTyping(true);
     } catch (error) {
-      console.error('Failed to get AI suggestion:', error);
-      setError('Failed to get AI suggestion. Please try again.');
+      console.error('Failed to get suggestion:', error);
     } finally {
       setIsFetchingSuggestion(false);
     }
@@ -519,7 +511,11 @@ export default function Todo() {
     setTodos(todos.filter((todo) => todo.id !== id));
 
     try {
-      const response = await deleteChecklistItem(id, planId, taskType);
+      const response = await deleteChecklistItem(
+        planId,
+        id,
+        taskType as 'daily' | 'longterm'
+      );
       if (response.result !== 'success') {
         // Restore if deletion failed
         setTodos((prevTodos) => [...prevTodos, todoToDelete]);
@@ -545,7 +541,6 @@ export default function Todo() {
         return;
       }
 
-      setIsLoadingInsights(true);
       const response = await getDailyInsights(planId);
       if (response && response.result) {
         setDailyInsights(response.result);
@@ -559,8 +554,6 @@ export default function Todo() {
       // Clear insights on error
       setDailyInsights([]);
       setVisibleInsights([]);
-    } finally {
-      setIsLoadingInsights(false);
     }
   };
 
@@ -584,7 +577,11 @@ export default function Todo() {
       setTodos((prevTodos) => [...prevTodos, tempNewItem]);
 
       // Actual API call
-      const newItem = await createChecklistItem(description, planId, taskType);
+      const newItem = await createChecklistItem(
+        description,
+        planId,
+        taskType as 'daily' | 'longterm'
+      );
 
       // Update the item with the real ID from the API
       setTodos((prevTodos) =>
@@ -636,40 +633,146 @@ export default function Todo() {
     setShowInsights((prev) => !prev);
   };
 
+  // Archive a todo
+  const archiveTodo = async (id: string) => {
+    // Find the original todo before archiving it
+    const todoToArchive = todos.find((todo) => todo.id === id);
+    if (!todoToArchive) return;
+
+    // Optimistic archive
+    setTodos(todos.filter((todo) => todo.id !== id));
+    setArchivedTodos([...archivedTodos, todoToArchive]);
+
+    try {
+      const response = await archiveChecklistItem(
+        id,
+        planId,
+        taskType as 'daily' | 'longterm'
+      );
+      if (response.result !== 'success') {
+        // Restore if archiving failed
+        setTodos((prevTodos) => [...prevTodos, todoToArchive]);
+        setArchivedTodos(archivedTodos.filter((todo) => todo.id !== id));
+        setError('Failed to archive task. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error archiving todo:', error);
+      // Restore if exception
+      setTodos((prevTodos) => [...prevTodos, todoToArchive]);
+      setArchivedTodos(archivedTodos.filter((todo) => todo.id !== id));
+      setError('Failed to archive task. Please try again.');
+    }
+  };
+
+  // Load archived todos
+  const loadArchivedTodos = async () => {
+    if (taskType !== 'archived') return;
+
+    try {
+      const response = await fetchArchivedChecklist(planId, 'daily');
+      setArchivedTodos(response.result || []);
+    } catch (error) {
+      console.error('Failed to load archived todos:', error);
+      setError('Failed to load archived tasks. Please try again.');
+    }
+  };
+
+  // Load archived todos when switching to archived view
+  useEffect(() => {
+    if (taskType === 'archived') {
+      loadArchivedTodos();
+    }
+  }, [taskType]);
+
   if (loading) {
     return <div className="py-4">Loading tasks...</div>;
   }
 
   return (
     <div className="space-y-4">
-      {/* Section Title with Task Type Switcher */}
+      {/* Header with Back button when in settings/archived view */}
+      {(showSettings || showArchived) && (
+        <button
+          onClick={() => {
+            setShowSettings(false);
+            setShowArchived(false);
+          }}
+          className="flex items-center text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 mb-4"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4 mr-1"
+          >
+            <path
+              fillRule="evenodd"
+              d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Back to tasks
+        </button>
+      )}
+
+      {/* Section Title with Task Type Switcher or Settings Title */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold">
-          {taskType === 'daily' ? 'Daily' : 'Long-term'}
+          {showSettings
+            ? 'Settings'
+            : showArchived
+            ? 'Archived Tasks'
+            : taskType === 'daily'
+            ? 'Daily'
+            : 'Long-term'}
         </h2>
-        <div className="flex items-center gap-3 text-sm">
-          <button
-            onClick={() => setTaskType('daily')}
-            className={`transition-colors hover:opacity-80 ${
-              taskType === 'daily' ? 'font-medium' : 'opacity-60'
-            }`}
-            style={{ color: taskType === 'daily' ? 'rgb(247, 111, 83)' : '' }}
-          >
-            Daily
-          </button>
-          <span className="opacity-30">|</span>
-          <button
-            onClick={() => setTaskType('longterm')}
-            className={`transition-colors hover:opacity-80 ${
-              taskType === 'longterm' ? 'font-medium' : 'opacity-60'
-            }`}
-            style={{
-              color: taskType === 'longterm' ? 'rgb(247, 111, 83)' : '',
-            }}
-          >
-            Long-term
-          </button>
-        </div>
+        {!showSettings && !showArchived && (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 text-sm">
+              <button
+                onClick={() => setTaskType('daily')}
+                className={`transition-colors hover:opacity-80 ${
+                  taskType === 'daily' ? 'font-medium' : 'opacity-60'
+                }`}
+                style={{
+                  color: taskType === 'daily' ? 'rgb(247, 111, 83)' : '',
+                }}
+              >
+                Daily
+              </button>
+              <span className="opacity-30">|</span>
+              <button
+                onClick={() => setTaskType('longterm')}
+                className={`transition-colors hover:opacity-80 ${
+                  taskType === 'longterm' ? 'font-medium' : 'opacity-60'
+                }`}
+                style={{
+                  color: taskType === 'longterm' ? 'rgb(247, 111, 83)' : '',
+                }}
+              >
+                Long-term
+              </button>
+            </div>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="ml-2 p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title="Settings"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="w-4 h-4 text-gray-500"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -678,239 +781,57 @@ export default function Todo() {
         </div>
       )}
 
-      <div className="space-y-3">
-        <form onSubmit={addTodo} className="flex space-x-2">
-          <input
-            type="text"
-            value={newTodo}
-            onChange={(e) => setNewTodo(e.target.value)}
-            placeholder={`Add a new ${
-              taskType === 'daily' ? 'task' : 'goal'
-            }...`}
-            className="flex-1 p-2 border rounded"
-            style={{ backgroundColor: 'transparent' }}
-            disabled={isSubmitting || isTyping}
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 rounded bg-white/5 dark:bg-gray-900/10"
-            style={{ color: 'rgb(247, 111, 83)' }}
-            disabled={isSubmitting || isTyping}
-          >
-            {isSubmitting ? 'Adding...' : 'Add'}
-          </button>
-        </form>
-
-        <div className="flex justify-between items-center">
-          <button
-            onClick={getAISuggestion}
-            disabled={isFetchingSuggestion || isTyping || isSuggestionTyping}
-            className="text-sm text-gray-600 flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5"
-          >
-            {isFetchingSuggestion ? (
-              'Getting suggestion...'
-            ) : (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-4 h-4 mr-1.5"
-                >
-                  <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-.707 9.293a1 1 0 0 1 0 1.414 1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L9 10.586l3.293-3.293a1 1 0 0 1 1.414 1.414l-4 4z" />
-                </svg>
-                Get Suggestion
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* AI Suggestion Component */}
-        {suggestion && (
-          <div className="mt-2 p-3 text-sm flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5 dark:bg-gray-900/10">
-            <div className="flex justify-between items-center w-full">
-              <div className="flex items-start">
-                <div className="flex-shrink-0 mt-0.5">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    className="w-5 h-5 text-gray-400 dark:text-gray-500"
-                  >
-                    <path d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" />
-                  </svg>
-                </div>
-                <div className="ml-2 text-gray-600 text-sm">
-                  <p className="font-medium">AI Suggestion</p>
-                  <p className="mt-1">
-                    {isSuggestionTyping ? displaySuggestion : suggestion}
-                    {isSuggestionTyping && (
-                      <span className="animate-pulse">|</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={useSuggestion}
-                disabled={isTyping || isSuggestionTyping}
-                className="ml-4 px-2.5 py-0.5 h-[30px] text-xs font-medium rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
-              >
-                Use suggestion
-              </button>
+      {/* Settings View */}
+      {showSettings && (
+        <div className="space-y-6 animate-slideIn">
+          <div className="flex items-center justify-between p-4 bg-white/5 dark:bg-gray-800/20 rounded-lg">
+            <div>
+              <h3 className="text-sm font-medium mb-1">Refresh daily tasks</h3>
+              <p className="text-xs text-gray-500">
+                Automatically refresh daily tasks at the start of each day
+              </p>
             </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={refreshDailyTasks}
+                onChange={(e) => setRefreshDailyTasks(e.target.checked)}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+            </label>
           </div>
-        )}
-      </div>
 
-      {todos.length === 0 ? (
-        <div className="py-4 text-center">
-          <p className="text-gray-500 text-sm">
-            {taskType === 'daily'
-              ? 'No daily tasks yet. Add one above!'
-              : 'No long-term goals yet. Add one above!'}
-          </p>
+          <button
+            onClick={() => setShowArchived(true)}
+            className="w-full p-4 text-left bg-white/5 dark:bg-gray-800/20 rounded-lg hover:bg-white/10 dark:hover:bg-gray-800/30 transition-colors"
+          >
+            <h3 className="text-sm font-medium mb-1">View archived tasks</h3>
+            <p className="text-xs text-gray-500">
+              View and manage your archived tasks
+            </p>
+          </button>
         </div>
-      ) : (
-        <ul className="space-y-3 mt-4">
-          {todos.map((todo) => (
-            <li
-              key={todo.id}
-              className={`relative flex items-center justify-between group transition-all duration-200 ${
-                newTodoAnimations[todo.id] ? 'animate-fadeIn' : ''
-              }`}
-            >
-              {/* show editing input during edit mode */}
-              {editingId === todo.id ? (
-                <div className="flex items-center space-x-3 flex-1">
-                  {/* show edit tooltip during edit mode */}
-                  <div className="absolute top-[-30px] right-0 text-xs bg-white/5 rounded-md px-2.5 py-1 shadow-sm">
-                    {todo?.scope === scope.longterm ? (
-                      <button
-                        onClick={() => handleMoveItem(todo.id, scope.daily)}
-                        className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="w-3.5 h-3.5 mr-1.5"
-                        >
-                          <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
-                        </svg>
-                        Move to Daily
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleMoveItem(todo.id, scope.longterm)}
-                        className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 20 20"
-                          fill="currentColor"
-                          className="w-3.5 h-3.5 mr-1.5"
-                        >
-                          <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
-                        </svg>
-                        Move to Long-term
-                      </button>
-                    )}
-                  </div>
-                  <Checkbox
-                    id={`todo-${todo.id}`}
-                    checked={todo.done}
-                    onCheckedChange={() => toggleTodo(todo.id)}
-                  />
-                  <div className="flex flex-1 space-x-2">
-                    <input
-                      ref={editInputRef}
-                      type="text"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      className="flex-1 px-2 py-1 text-sm border rounded"
-                      style={{ backgroundColor: 'transparent' }}
-                      disabled={isUpdating}
-                    />
-                    <button
-                      onClick={() => updateTodoDescription(todo.id)}
-                      className="px-2 py-1 text-xs rounded bg-white/5"
-                      style={{ color: 'rgb(247, 111, 83)' }}
-                      disabled={isUpdating}
-                    >
-                      {isUpdating ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      onClick={cancelEditing}
-                      className="px-2 py-1 text-xs rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700"
-                      disabled={isUpdating}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : schedulingId === todo.id ? (
-                <div className="flex items-center space-x-3 flex-1">
-                  <Checkbox
-                    id={`todo-${todo.id}`}
-                    checked={todo.done}
-                    onCheckedChange={() => toggleTodo(todo.id)}
-                  />
-                  <div className="flex flex-1 flex-wrap space-x-2">
-                    <label
-                      className={`text-sm cursor-pointer flex-1 ${
-                        todo.done ? 'line-through opacity-70' : ''
-                      }`}
-                    >
-                      {todo.description}
-                    </label>
-                    <div className="mt-2 flex items-center space-x-2 w-full">
-                      <DatePicker
-                        selected={scheduleDate}
-                        onChange={(date) => setScheduleDate(date)}
-                        showTimeSelect
-                        timeFormat="h:mm aa"
-                        timeIntervals={15}
-                        dateFormat="MMMM d, yyyy h:mm aa"
-                        className="text-sm p-2 border rounded flex-grow bg-transparent"
-                        placeholderText="Select date and time"
-                        disabled={isScheduling}
-                      />
-                      <button
-                        onClick={scheduleTodo}
-                        className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
-                        style={{ color: 'rgb(247, 111, 83)' }}
-                        disabled={isScheduling || !scheduleDate}
-                      >
-                        {isScheduling ? 'Saving...' : 'Schedule'}
-                      </button>
-                      <button
-                        onClick={cancelScheduling}
-                        className="px-2 py-1 text-xs rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700"
-                        disabled={isScheduling}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
+      )}
+
+      {/* Archived Tasks View */}
+      {showArchived && (
+        <div className="space-y-4">
+          {archivedTodos.length === 0 ? (
+            <div className="py-4 text-center">
+              <p className="text-gray-500 text-sm">No archived tasks found.</p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {archivedTodos.map((todo) => (
+                <li
+                  key={todo.id}
+                  className="relative flex items-center justify-between group transition-all duration-200 opacity-60"
+                >
                   <div className="flex items-center space-x-3 flex-1">
-                    <Checkbox
-                      id={`todo-${todo.id}`}
-                      checked={todo.done}
-                      onCheckedChange={() => toggleTodo(todo.id)}
-                    />
                     <div className="flex flex-col flex-1">
-                      <label
-                        className={`text-sm cursor-pointer flex-1 ${
-                          todo.done ? 'line-through opacity-70' : ''
-                        } ${newTodoAnimations[todo.id] ? 'relative' : ''}`}
-                      >
+                      <label className="text-sm cursor-default flex-1">
                         {todo.description}
-                        {newTodoAnimations[todo.id] && (
-                          <span className="absolute -right-1 bottom-0 h-5 w-0.5 bg-orange-400 dark:bg-orange-500 animate-cursor"></span>
-                        )}
                       </label>
                       {todo.scheduledTime && (
                         <div className="mt-1 text-xs flex items-center text-gray-500">
@@ -931,204 +852,455 @@ export default function Todo() {
                       )}
                     </div>
                   </div>
-
-                  <div className="absolute right-[0] flex space-x-1">
-                    {/* Schedule Icon */}
-                    <button
-                      onClick={() => startScheduling(todo)}
-                      title="Schedule this task"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                      style={{
-                        color: todo.scheduledTime
-                          ? 'rgb(247, 111, 83)'
-                          : 'rgb(150, 150, 150)',
-                      }}
+                  <button
+                    onClick={() => deleteTodo(todo.id)}
+                    title="Delete task permanently"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                    style={{ color: 'rgb(247, 111, 83)' }}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-
-                    {/* Edit Icon */}
-                    <button
-                      onClick={() => startEditing(todo)}
-                      title="Edit task"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                      style={{ color: 'rgb(247, 111, 83)' }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                      </svg>
-                    </button>
-
-                    {/* Delete Icon */}
-                    <button
-                      onClick={() => deleteTodo(todo.id)}
-                      title="Delete task"
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                      style={{ color: 'rgb(247, 111, 83)' }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ul>
+                      <path
+                        fillRule="evenodd"
+                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
-      {/* Daily Insights Section */}
-      {taskType === 'daily' &&
-        todos.length > 0 &&
-        (isLoadingInsights ? (
-          <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
-            <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium">Suggested Daily Tasks</h3>
-                <div className="relative group">
-                  <button
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    aria-label="Information about daily suggestions"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
-                      <p className="text-sm text-white mb-1">
-                        Focus on what matters most to you
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Daily suggestions are driven by your long-term goals and
-                        priorities
-                      </p>
-                    </div>
-                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white/5 border-r border-b border-white/10 transform rotate-45"></div>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={toggleInsightsVisibility}
-                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                {showInsights ? 'Hide suggestions' : 'Show suggestions'}
-              </button>
-            </div>
-          </div>
-        ) : dailyInsights.length > 0 ? (
-          <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
-            <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium">Suggested Daily Tasks</h3>
-                <div className="relative group">
-                  <button
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                    aria-label="Information about daily suggestions"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                    <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
-                      <p className="text-sm text-white mb-1">
-                        Focus on what matters most to you
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Daily suggestions are driven by your long-term goals and
-                        priorities
-                      </p>
-                    </div>
-                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white/5 border-r border-b border-white/10 transform rotate-45"></div>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={toggleInsightsVisibility}
-                className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                {showInsights ? 'Hide suggestions' : 'Show suggestions'}
-              </button>
-            </div>
+      {/* Main Tasks View */}
+      {!showSettings && !showArchived && (
+        <div className="animate-slideIn">
+          {/* Only show add form and AI suggestion for non-archived views */}
+          {taskType !== 'archived' && (
+            <div className="space-y-3">
+              <form onSubmit={addTodo} className="flex space-x-2">
+                <input
+                  type="text"
+                  value={newTodo}
+                  onChange={(e) => setNewTodo(e.target.value)}
+                  placeholder={`Add a new ${
+                    taskType === 'daily' ? 'task' : 'goal'
+                  }...`}
+                  className="flex-1 p-2 border rounded"
+                  style={{ backgroundColor: 'transparent' }}
+                  disabled={isSubmitting || isTyping}
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded bg-white/5 dark:bg-gray-900/10"
+                  style={{ color: 'rgb(247, 111, 83)' }}
+                  disabled={isSubmitting || isTyping}
+                >
+                  {isSubmitting ? 'Adding...' : 'Add'}
+                </button>
+              </form>
 
-            {showInsights && (
-              <div className="space-y-3 p-3 bg-white/5 dark:bg-gray-800/20 rounded-md">
-                <div className="flex justify-end">
-                  <span className="text-xs text-gray-500">
-                    Based on long-term goals
-                  </span>
-                </div>
-
-                <ul className="space-y-2">
-                  {dailyInsights.map((insight, index) => (
-                    <li
-                      key={`insight-${index}`}
-                      className={`flex items-center justify-between transition-all duration-500 ${
-                        visibleInsights[index]
-                          ? 'opacity-100 translate-y-0'
-                          : 'opacity-0 translate-y-2'
-                      }`}
-                    >
-                      <span className="text-sm text-gray-300">{insight}</span>
-                      <button
-                        onClick={() => addInsightAsTodo(insight)}
-                        className="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 dark:hover:bg-gray-700/50"
-                        style={{ color: 'rgb(247, 111, 83)' }}
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={getAISuggestion}
+                  disabled={
+                    isFetchingSuggestion || isTyping || isSuggestionTyping
+                  }
+                  className="text-sm text-gray-600 flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5"
+                >
+                  {isFetchingSuggestion ? (
+                    'Getting suggestion...'
+                  ) : (
+                    <>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className="w-4 h-4 mr-1.5"
                       >
-                        Add
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-.707 9.293a1 1 0 0 1 0 1.414 1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L9 10.586l3.293-3.293a1 1 0 0 1 1.414 1.414l-4 4z" />
+                      </svg>
+                      Get Suggestion
+                    </>
+                  )}
+                </button>
               </div>
-            )}
-          </div>
-        ) : null)}
+
+              {/* AI Suggestion Component */}
+              {suggestion && (
+                <div className="mt-2 p-3 text-sm flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5 dark:bg-gray-900/10">
+                  <div className="flex justify-between items-center w-full">
+                    <div className="flex items-start">
+                      <div className="ml-2 text-gray-600 text-sm">
+                        <p className="text-gray-600 font-medium">
+                          generated suggestion
+                        </p>
+                        <p className="mt-1">
+                          {isSuggestionTyping ? displaySuggestion : suggestion}
+                          {isSuggestionTyping && (
+                            <span className="animate-pulse">|</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={useSuggestion}
+                      disabled={isTyping || isSuggestionTyping}
+                      className="ml-4 px-2.5 py-0.5 h-[30px] text-xs font-medium rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+                    >
+                      Use suggestion
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {todos.length === 0 ? (
+            <div className="py-4 text-center">
+              <p className="text-gray-500 text-sm">
+                {taskType === 'daily'
+                  ? 'No daily tasks yet. Add one above!'
+                  : taskType === 'longterm'
+                  ? 'No long-term goals yet. Add one above!'
+                  : 'No archived items found.'}
+              </p>
+            </div>
+          ) : (
+            <ul className="space-y-3 mt-4">
+              {todos.map((todo) => (
+                <li
+                  key={todo.id}
+                  className={`relative flex items-center justify-between group transition-all duration-200 ${
+                    newTodoAnimations[todo.id] ? 'animate-fadeIn' : ''
+                  } ${taskType === 'archived' ? 'opacity-60' : ''}`}
+                >
+                  {editingId === todo.id ? (
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="absolute top-[-30px] right-0 text-xs bg-white/5 rounded-md px-2.5 py-1 shadow-sm">
+                        {todo?.scope === scope.longterm ? (
+                          <button
+                            onClick={() => handleMoveItem(todo.id, scope.daily)}
+                            className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className="w-3.5 h-3.5 mr-1.5"
+                            >
+                              <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
+                            </svg>
+                            Move to Daily
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleMoveItem(todo.id, scope.longterm)
+                            }
+                            className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className="w-3.5 h-3.5 mr-1.5"
+                            >
+                              <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
+                            </svg>
+                            Move to Long-term
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-1 space-x-2">
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          className="flex-1 px-2 py-1 text-sm border rounded"
+                          style={{ backgroundColor: 'transparent' }}
+                          disabled={isUpdating}
+                        />
+                        <button
+                          onClick={() => updateTodoDescription(todo.id)}
+                          className="px-2 py-1 text-xs rounded bg-white/5"
+                          style={{ color: 'rgb(247, 111, 83)' }}
+                          disabled={isUpdating}
+                        >
+                          {isUpdating ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="px-2 py-1 text-xs rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700"
+                          disabled={isUpdating}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : schedulingId === todo.id ? (
+                    <div className="flex items-center space-x-3 flex-1">
+                      <Checkbox
+                        id={`todo-${todo.id}`}
+                        checked={todo.done}
+                        onCheckedChange={() => toggleTodo(todo.id)}
+                      />
+                      <div className="flex flex-1 flex-wrap space-x-2">
+                        <label
+                          className={`text-sm cursor-pointer flex-1 ${
+                            todo.done ? 'line-through opacity-70' : ''
+                          }`}
+                        >
+                          {todo.description}
+                        </label>
+                        <div className="mt-2 flex items-center space-x-2 w-full">
+                          <DatePicker
+                            selected={scheduleDate}
+                            onChange={(date) => setScheduleDate(date)}
+                            showTimeSelect
+                            timeFormat="h:mm aa"
+                            timeIntervals={15}
+                            dateFormat="MMMM d, yyyy h:mm aa"
+                            className="text-sm p-2 border rounded flex-grow bg-transparent"
+                            placeholderText="Select date and time"
+                            disabled={isScheduling}
+                          />
+                          <button
+                            onClick={scheduleTodo}
+                            className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
+                            style={{ color: 'rgb(247, 111, 83)' }}
+                            disabled={isScheduling || !scheduleDate}
+                          >
+                            {isScheduling ? 'Saving...' : 'Schedule'}
+                          </button>
+                          <button
+                            onClick={cancelScheduling}
+                            className="px-2 py-1 text-xs rounded bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900/80 border border-gray-200 dark:border-gray-700"
+                            disabled={isScheduling}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center space-x-3 flex-1">
+                        {taskType !== 'archived' && (
+                          <Checkbox
+                            id={`todo-${todo.id}`}
+                            checked={todo.done}
+                            onCheckedChange={() => toggleTodo(todo.id)}
+                          />
+                        )}
+                        <div className="flex flex-col flex-1">
+                          <label
+                            className={`text-sm cursor-pointer flex-1 ${
+                              todo.done ? 'line-through opacity-70' : ''
+                            } ${newTodoAnimations[todo.id] ? 'relative' : ''}`}
+                          >
+                            {todo.description}
+                          </label>
+                          {todo.scheduledTime && (
+                            <div className="mt-1 text-xs flex items-center text-gray-500">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className="w-3 h-3 mr-1 text-orange-400"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                              {formatScheduleTime(todo.scheduledTime)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="absolute right-[0] flex space-x-1">
+                        {taskType === 'archived' ? (
+                          // Delete button for archived items
+                          <button
+                            onClick={() => deleteTodo(todo.id)}
+                            title="Delete task permanently"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                            style={{ color: 'rgb(247, 111, 83)' }}
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className="w-4 h-4"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </button>
+                        ) : (
+                          <>
+                            {/* Schedule Icon */}
+                            <button
+                              onClick={() => startScheduling(todo)}
+                              title="Schedule this task"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                              style={{
+                                color: todo.scheduledTime
+                                  ? 'rgb(247, 111, 83)'
+                                  : 'rgb(150, 150, 150)',
+                              }}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className="w-4 h-4"
+                              >
+                                <path
+                                  fillRule="evenodd"
+                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
+
+                            {/* Edit Icon */}
+                            <button
+                              onClick={() => startEditing(todo)}
+                              title="Edit task"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                              style={{ color: 'rgb(247, 111, 83)' }}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className="w-4 h-4"
+                              >
+                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                              </svg>
+                            </button>
+
+                            {/* Archive Icon */}
+                            <button
+                              onClick={() => archiveTodo(todo.id)}
+                              title="Archive task"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                              style={{ color: 'rgb(247, 111, 83)' }}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                                className="w-4 h-4"
+                              >
+                                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Daily Insights Section - Only show for daily view */}
+          {taskType === 'daily' && todos.length > 0 && (
+            <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium">Suggested Daily Tasks</h3>
+                  <div className="relative group">
+                    <button
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                      aria-label="Information about daily suggestions"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
+                        <p className="text-sm text-white mb-1">
+                          Focus on what matters most to you
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Daily suggestions are driven by your long-term goals
+                          and priorities
+                        </p>
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white/5 border-r border-b border-white/10 transform rotate-45"></div>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleInsightsVisibility}
+                  className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  {showInsights ? 'Hide suggestions' : 'Show suggestions'}
+                </button>
+              </div>
+
+              {showInsights && (
+                <div className="space-y-3 p-3 bg-white/5 dark:bg-gray-800/20 rounded-md">
+                  <div className="flex justify-end">
+                    <span className="text-xs text-gray-500">
+                      Based on long-term goals
+                    </span>
+                  </div>
+
+                  <ul className="space-y-2">
+                    {dailyInsights.map((insight, index) => (
+                      <li
+                        key={`insight-${index}`}
+                        className={`flex items-center justify-between transition-all duration-500 ${
+                          visibleInsights[index]
+                            ? 'opacity-100 translate-y-0'
+                            : 'opacity-0 translate-y-2'
+                        }`}
+                      >
+                        <span className="text-sm text-gray-300">{insight}</span>
+                        <button
+                          onClick={() => addInsightAsTodo(insight)}
+                          className="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 dark:hover:bg-gray-700/50"
+                          style={{ color: 'rgb(247, 111, 83)' }}
+                        >
+                          Add
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes fadeIn {
@@ -1151,11 +1323,24 @@ export default function Todo() {
             opacity: 0;
           }
         }
+        @keyframes slideIn {
+          0% {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out;
         }
         .animate-cursor {
           animation: cursorBlink 0.8s infinite;
+        }
+        .animate-slideIn {
+          animation: slideIn 0.3s ease-out;
         }
       `}</style>
     </div>
