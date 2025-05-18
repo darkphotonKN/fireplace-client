@@ -892,8 +892,7 @@ export default function Todo() {
                   placeholder={`Add a new ${
                     taskType === 'daily' ? 'task' : 'goal'
                   }...`}
-                  className="flex-1 p-2 border rounded"
-                  style={{ backgroundColor: 'transparent' }}
+                  className="flex-1 px-0 py-0 text-sm bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-orange-500 dark:focus:border-orange-500 focus:outline-none"
                   disabled={isSubmitting || isTyping}
                 />
                 <button
@@ -983,49 +982,18 @@ export default function Todo() {
                 >
                   {editingId === todo.id ? (
                     <div className="flex items-center space-x-3 flex-1">
-                      <div className="absolute top-[-30px] right-0 text-xs bg-white/5 rounded-md px-2.5 py-1 shadow-sm">
-                        {todo?.scope === scope.longterm ? (
-                          <button
-                            onClick={() => handleMoveItem(todo.id, scope.daily)}
-                            className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                              className="w-3.5 h-3.5 mr-1.5"
-                            >
-                              <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
-                            </svg>
-                            Move to Daily
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              handleMoveItem(todo.id, scope.longterm)
-                            }
-                            className="text-[rgb(247,111,83)] font-medium hover:underline flex items-center"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                              className="w-3.5 h-3.5 mr-1.5"
-                            >
-                              <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z" />
-                            </svg>
-                            Move to Long-term
-                          </button>
-                        )}
-                      </div>
                       <div className="flex flex-1 space-x-2">
                         <input
                           ref={editInputRef}
                           type="text"
                           value={editText}
                           onChange={(e) => setEditText(e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm border rounded"
-                          style={{ backgroundColor: 'transparent' }}
+                          className="flex-1 px-0 py-0 text-sm bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-orange-500 dark:focus:border-orange-500 focus:outline-none"
+                          style={{
+                            color: todo.done ? 'rgb(247, 111, 83)' : '',
+                            textDecoration: todo.done ? 'line-through' : 'none',
+                            opacity: todo.done ? 0.7 : 1,
+                          }}
                           disabled={isUpdating}
                         />
                         <button
@@ -1207,7 +1175,8 @@ export default function Todo() {
                                 fill="currentColor"
                                 className="w-4 h-4"
                               >
-                                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                                <path d="M2 3a1 1 0 00-1 1v1a1 1 0 001 1h16a1 1 0 001-1V4a1 1 0 00-1-1H2z" />
+                                <path d="M2 7a1 1 0 00-1 1v10a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1H2zm0 2h16v8H2V9z" />
                               </svg>
                             </button>
                           </>

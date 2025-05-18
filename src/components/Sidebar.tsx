@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Logo from './Logo';
 
 // Interface for navigation items
 interface NavItem {
@@ -40,6 +39,7 @@ export default function Sidebar() {
 
   // State to track dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   // State for plans
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -121,84 +121,84 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside
-      className="w-64 h-screen fixed left-0 top-0 pt-8 px-4 overflow-y-auto transition-colors"
-      style={{
-        backgroundColor: isDarkMode
-          ? '#171717' // Darker than #1f1f1f main dark background
-          : 'rgb(232, 230, 217)', // Slightly darker than light mode background
-      }}
+    <div
+      className="fixed left-0 top-0 h-screen z-20"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <nav className="space-y-6">
-        {/* Title with Logo */}
-        <div className="flex items-center gap-2">
-          <Logo />
-          <Link href="/">
-            <h1 className="text-3xl font-bold">Fireplace</h1>
-          </Link>
-        </div>
+      <aside
+        className={`h-screen pt-8 px-4 overflow-y-auto transition-all duration-300 ${
+          isHovered ? 'w-64 opacity-100' : 'w-0 opacity-0'
+        }`}
+        style={{
+          backgroundColor: isDarkMode
+            ? '#171717' // Darker than #1f1f1f main dark background
+            : 'rgb(232, 230, 217)', // Slightly darker than light mode background
+        }}
+      >
+        <nav className="space-y-6">
+          {/* Core List */}
+          <div className="py-4">
+            {navSections.map((section) => (
+              <div key={section.title} className="space-y-2 pb-4">
+                <h3 className="font-semibold text-sm uppercase tracking-wider opacity-70">
+                  {section.title}
+                </h3>
 
-        {/* Core List */}
-        <div className="py-4">
-          {navSections.map((section) => (
-            <div key={section.title} className="space-y-2 pb-4">
-              <h3 className="font-semibold text-sm uppercase tracking-wider opacity-70">
-                {section.title}
-              </h3>
-
-              <ul className="space-y-1 pl-2">
-                {isLoading ? (
-                  <li className="text-sm opacity-70 px-3 py-2">Loading...</li>
-                ) : error ? (
-                  <li className="text-sm opacity-70 px-3 py-2">{error}</li>
-                ) : section.items.length === 0 ? (
-                  <li className="text-sm opacity-70 px-3 py-2">
-                    No {section.title.toLowerCase()} found
-                  </li>
-                ) : (
-                  section.items.map((item) => (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        className={`flex px-3 py-2 text-sm rounded-md ${
-                          item.isActive
-                            ? 'bg-opacity-30 font-medium'
-                            : 'hover:bg-opacity-20'
-                        } transition-colors cursor-pointer`}
-                        style={{
-                          backgroundColor: item.isActive
-                            ? 'rgba(247, 111, 83, 0.1)'
-                            : 'transparent',
-                          color: item.isActive
-                            ? 'rgb(247, 111, 83)'
-                            : 'inherit',
-                        }}
-                      >
-                        {item.name}
-                      </Link>
+                <ul className="space-y-1 pl-2">
+                  {isLoading ? (
+                    <li className="text-sm opacity-70 px-3 py-2">Loading...</li>
+                  ) : error ? (
+                    <li className="text-sm opacity-70 px-3 py-2">{error}</li>
+                  ) : section.items.length === 0 ? (
+                    <li className="text-sm opacity-70 px-3 py-2">
+                      No {section.title.toLowerCase()} found
                     </li>
-                  ))
-                )}
-              </ul>
-            </div>
-          ))}
-        </div>
+                  ) : (
+                    section.items.map((item) => (
+                      <li key={item.name}>
+                        <Link
+                          href={item.href}
+                          className={`flex px-3 py-2 text-sm rounded-md ${
+                            item.isActive
+                              ? 'bg-opacity-30 font-medium'
+                              : 'hover:bg-opacity-20'
+                          } transition-colors cursor-pointer`}
+                          style={{
+                            backgroundColor: item.isActive
+                              ? 'rgba(247, 111, 83, 0.1)'
+                              : 'transparent',
+                            color: item.isActive
+                              ? 'rgb(247, 111, 83)'
+                              : 'inherit',
+                          }}
+                        >
+                          {item.name}
+                        </Link>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            ))}
+          </div>
 
-        {/* Plan Button */}
-        <Link
-          href="/create-plan"
-          className="block w-full py-2 px-4 rounded-md text-sm font-medium text-center transition-all hover:bg-opacity-10"
-          style={{
-            border: '1px solid rgb(247, 111, 83)',
-            color: 'rgb(247, 111, 83)',
-            backgroundColor: isDarkMode
-              ? 'rgba(247, 111, 83, 0.05)'
-              : 'rgba(247, 111, 83, 0.02)',
-          }}
-        >
-          Create New Plan
-        </Link>
-      </nav>
-    </aside>
+          {/* Plan Button */}
+          <Link
+            href="/create-plan"
+            className="block w-full py-2 px-4 rounded-md text-sm font-medium text-center transition-all hover:bg-opacity-10"
+            style={{
+              border: '1px solid rgb(247, 111, 83)',
+              color: 'rgb(247, 111, 83)',
+              backgroundColor: isDarkMode
+                ? 'rgba(247, 111, 83, 0.05)'
+                : 'rgba(247, 111, 83, 0.02)',
+            }}
+          >
+            Create New Plan
+          </Link>
+        </nav>
+      </aside>
+    </div>
   );
 }
