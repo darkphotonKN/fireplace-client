@@ -126,14 +126,20 @@ export default function Sidebar() {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* 50px trigger area */}
+      <div className="absolute left-0 top-0 h-full w-[50px]" />
+
       <aside
         className={`h-screen pt-8 px-4 overflow-y-auto transition-all duration-300 ${
-          isHovered ? 'w-64 opacity-100' : 'w-0 opacity-0'
+          isHovered
+            ? 'translate-x-0 opacity-100'
+            : '-translate-x-full opacity-0'
         }`}
         style={{
           backgroundColor: isDarkMode
             ? '#171717' // Darker than #1f1f1f main dark background
             : 'rgb(232, 230, 217)', // Slightly darker than light mode background
+          width: '16rem', // Fixed width of 16rem (256px)
         }}
       >
         <nav className="space-y-6">

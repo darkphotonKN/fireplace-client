@@ -502,30 +502,30 @@ export default function Todo() {
   console.log('@Debug todos:', todos);
 
   // Delete a todo
-  const deleteTodo = async (id: string) => {
-    // Find the original todo before removing it
-    const todoToDelete = todos.find((todo) => todo.id === id);
-    if (!todoToDelete) return;
+  const deleteTodo = async (todoId: string) => {
+    if (!planId) return;
 
-    // Optimistic deletion
-    setTodos(todos.filter((todo) => todo.id !== id));
-
+    setIsUpdating(true);
     try {
-      const response = await deleteChecklistItem(
-        planId,
-        id,
-        taskType as 'daily' | 'longterm'
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/plans/${planId}/checklists/${todoId}`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+        }
       );
-      if (response.result !== 'success') {
-        // Restore if deletion failed
-        setTodos((prevTodos) => [...prevTodos, todoToDelete]);
-        setError('Failed to delete task. Please try again.');
+
+      if (!response.ok) {
+        throw new Error('Failed to delete task');
       }
+
+      // Remove the deleted todo from the state
+      setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== todoId));
     } catch (error) {
-      console.error('Error deleting todo:', error);
-      // Restore if exception
-      setTodos((prevTodos) => [...prevTodos, todoToDelete]);
-      setError('Failed to delete task. Please try again.');
+      console.error('Error deleting task:', error);
+      setError('Failed to delete task');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -1060,39 +1060,51 @@ export default function Todo() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center space-x-3 flex-1">
-                        {taskType !== 'archived' && (
-                          <Checkbox
-                            id={`todo-${todo.id}`}
+                      <div
+                        className="flex items-center space-x-3 flex-1"
+                        onClick={() => toggleTodo(todo.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div className="flex flex-1 space-x-2">
+                          <input
+                            type="checkbox"
                             checked={todo.done}
-                            onCheckedChange={() => toggleTodo(todo.id)}
+                            onChange={() => toggleTodo(todo.id)}
+                            className="w-4 h-4 rounded border-gray-300 dark:border-gray-600"
+                            style={{
+                              color: 'rgb(247, 111, 83)',
+                              accentColor: 'rgb(247, 111, 83)',
+                            }}
+                            disabled={isUpdating}
                           />
-                        )}
-                        <div className="flex flex-col flex-1">
-                          <label
-                            className={`text-sm cursor-pointer flex-1 ${
-                              todo.done ? 'line-through opacity-70' : ''
-                            } ${newTodoAnimations[todo.id] ? 'relative' : ''}`}
-                          >
-                            {todo.description}
-                          </label>
-                          {todo.scheduledTime && (
-                            <div className="mt-1 text-xs flex items-center text-gray-500">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                                className="w-3 h-3 mr-1 text-orange-400"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                              {formatScheduleTime(todo.scheduledTime)}
-                            </div>
-                          )}
+                          <div className="flex flex-col flex-1">
+                            <label
+                              className={`text-sm cursor-pointer flex-1 ${
+                                todo.done ? 'line-through opacity-70' : ''
+                              } ${
+                                newTodoAnimations[todo.id] ? 'relative' : ''
+                              }`}
+                            >
+                              {todo.description}
+                            </label>
+                            {todo.scheduledTime && (
+                              <div className="mt-1 text-xs flex items-center text-gray-500">
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 20 20"
+                                  fill="currentColor"
+                                  className="w-3 h-3 mr-1 text-orange-400"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                                {formatScheduleTime(todo.scheduledTime)}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1113,7 +1125,7 @@ export default function Todo() {
                             >
                               <path
                                 fillRule="evenodd"
-                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm6.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
                                 clipRule="evenodd"
                               />
                             </svg>
