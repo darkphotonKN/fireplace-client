@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   fetchChecklist,
   createChecklistItem,
@@ -17,10 +17,22 @@ import {
   fetchArchivedChecklist,
   ChecklistResponse,
   ChecklistSuggestionResponse,
-} from '@/services/api';
-import { useParams } from 'next/navigation';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+  toggleDailyReset,
+  fetchPlanDetails,
+} from "@/services/api";
+import { useParams } from "next/navigation";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { debounce } from "lodash";
+
+interface Plan {
+  id: string;
+  name: string;
+  planType: string;
+  focus?: string;
+  description?: string;
+  dailyReset: boolean;
+}
 
 export default function Todo() {
   const params = useParams();
@@ -30,15 +42,15 @@ export default function Todo() {
   const [error, setError] = useState<string | null>(null);
 
   // Task type state (daily, longterm, or archived)
-  const [taskType, setTaskType] = useState<'daily' | 'longterm' | 'archived'>(
-    'daily'
+  const [taskType, setTaskType] = useState<"daily" | "longterm" | "archived">(
+    "daily",
   );
 
-  const [newTodo, setNewTodo] = useState('');
+  const [newTodo, setNewTodo] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
+  const [editText, setEditText] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,14 +61,14 @@ export default function Todo() {
 
   // AI suggestion state
   const [suggestion, setSuggestion] = useState<string | null>(null);
-  const [displaySuggestion, setDisplaySuggestion] = useState('');
+  const [displaySuggestion, setDisplaySuggestion] = useState("");
   const [isSuggestionTyping, setIsSuggestionTyping] = useState(false);
   const [isFetchingSuggestion, setIsFetchingSuggestion] = useState(false);
 
   // Typing animation state
   const [isTyping, setIsTyping] = useState(false);
   const [typingIndex, setTypingIndex] = useState(0);
-  const [fullText, setFullText] = useState('');
+  const [fullText, setFullText] = useState("");
   const typingSpeed = 15; // milliseconds per character (faster)
 
   // New todo animation state
@@ -76,18 +88,22 @@ export default function Todo() {
   const [showSettings, setShowSettings] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [refreshDailyTasks, setRefreshDailyTasks] = useState(true);
+  const [dailyReset, setDailyReset] = useState(false);
+  const [isTogglingReset, setIsTogglingReset] = useState(false);
+  const [lastToggleTime, setLastToggleTime] = useState(0);
+  const TOGGLE_THROTTLE_MS = 1000; // 1 second throttle
 
   // Load show/hide preference from localStorage on mount
   useEffect(() => {
-    const savedPreference = localStorage.getItem('showDailyInsights');
+    const savedPreference = localStorage.getItem("showDailyInsights");
     if (savedPreference !== null) {
-      setShowInsights(savedPreference === 'true');
+      setShowInsights(savedPreference === "true");
     }
   }, []);
 
   // Save show/hide preference to localStorage
   useEffect(() => {
-    localStorage.setItem('showDailyInsights', String(showInsights));
+    localStorage.setItem("showDailyInsights", String(showInsights));
   }, [showInsights]);
 
   // Handle sequential fade-up animation for insights
@@ -111,15 +127,15 @@ export default function Todo() {
 
   // Load refresh preference from localStorage on mount
   useEffect(() => {
-    const savedPreference = localStorage.getItem('refreshDailyTasks');
+    const savedPreference = localStorage.getItem("refreshDailyTasks");
     if (savedPreference !== null) {
-      setRefreshDailyTasks(savedPreference === 'true');
+      setRefreshDailyTasks(savedPreference === "true");
     }
   }, []);
 
   // Save refresh preference to localStorage
   useEffect(() => {
-    localStorage.setItem('refreshDailyTasks', String(refreshDailyTasks));
+    localStorage.setItem("refreshDailyTasks", String(refreshDailyTasks));
   }, [refreshDailyTasks]);
 
   // Fetch todos on component mount and when planId or taskType changes
@@ -129,20 +145,20 @@ export default function Todo() {
         setLoading(true);
         let response: ChecklistResponse;
 
-        if (taskType === 'archived') {
-          response = await fetchArchivedChecklist(planId, 'daily');
+        if (taskType === "archived") {
+          response = await fetchArchivedChecklist(planId, "daily");
         } else {
           response = await fetchChecklist(
             planId,
-            taskType as 'daily' | 'longterm'
+            taskType as "daily" | "longterm",
           );
         }
 
         setTodos(response.result || []);
         setError(null);
       } catch (error) {
-        console.error('Failed to fetch checklist items:', error);
-        setError('Failed to load tasks. Please try again later.');
+        console.error("Failed to fetch checklist items:", error);
+        setError("Failed to load tasks. Please try again later.");
         setTodos([]);
       } finally {
         setLoading(false);
@@ -152,7 +168,7 @@ export default function Todo() {
     loadTodos();
 
     // If we're in daily mode, also fetch the daily insights
-    if (taskType === 'daily') {
+    if (taskType === "daily") {
       fetchDailyInsights();
     } else {
       // Clear insights when not in daily mode
@@ -184,7 +200,7 @@ export default function Todo() {
     if (!isSuggestionTyping || !suggestion) return;
 
     let currentIndex = 0;
-    setDisplaySuggestion('');
+    setDisplaySuggestion("");
 
     const interval = setInterval(() => {
       if (currentIndex < suggestion.length) {
@@ -216,8 +232,8 @@ export default function Todo() {
     const newDoneStatus = !todoToToggle.done;
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, done: newDoneStatus } : todo
-      )
+        todo.id === id ? { ...todo, done: newDoneStatus } : todo,
+      ),
     );
 
     try {
@@ -226,26 +242,26 @@ export default function Todo() {
         id,
         { done: newDoneStatus },
         planId,
-        taskType as 'daily' | 'longterm'
+        taskType as "daily" | "longterm",
       );
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
-            todo.id === id ? { ...todo, done: todoToToggle.done } : todo
-          )
+            todo.id === id ? { ...todo, done: todoToToggle.done } : todo,
+          ),
         );
-        setError('Failed to update task status. Please try again.');
+        setError("Failed to update task status. Please try again.");
       }
     } catch (error) {
-      console.error('Error toggling todo:', error);
+      console.error("Error toggling todo:", error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, done: todoToToggle.done } : todo
-        )
+          todo.id === id ? { ...todo, done: todoToToggle.done } : todo,
+        ),
       );
-      setError('Failed to update task status. Please try again.');
+      setError("Failed to update task status. Please try again.");
     }
   };
 
@@ -253,7 +269,7 @@ export default function Todo() {
   const startScheduling = (todo: ChecklistItem) => {
     setSchedulingId(todo.id);
     setScheduleDate(
-      todo.scheduledTime ? new Date(todo.scheduledTime) : new Date()
+      todo.scheduledTime ? new Date(todo.scheduledTime) : new Date(),
     );
   };
 
@@ -280,8 +296,8 @@ export default function Todo() {
       todos.map((todo) =>
         todo.id === schedulingId
           ? { ...todo, scheduledTime: scheduleDate.toISOString() }
-          : todo
-      )
+          : todo,
+      ),
     );
 
     try {
@@ -290,31 +306,31 @@ export default function Todo() {
         schedulingId,
         planId,
         scheduleDate,
-        taskType as 'daily' | 'longterm'
+        taskType as "daily" | "longterm",
       );
 
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
             todo.id === schedulingId
               ? { ...todo, scheduledTime: originalScheduledTime }
-              : todo
-          )
+              : todo,
+          ),
         );
-        setError('Failed to schedule task. Please try again.');
+        setError("Failed to schedule task. Please try again.");
       }
     } catch (error) {
-      console.error('Error scheduling todo:', error);
+      console.error("Error scheduling todo:", error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
           todo.id === schedulingId
             ? { ...todo, scheduledTime: originalScheduledTime }
-            : todo
-        )
+            : todo,
+        ),
       );
-      setError('Failed to schedule task. Please try again.');
+      setError("Failed to schedule task. Please try again.");
     } finally {
       setIsScheduling(false);
       setSchedulingId(null);
@@ -329,7 +345,7 @@ export default function Todo() {
 
   const cancelEditing = () => {
     setEditingId(null);
-    setEditText('');
+    setEditText("");
   };
 
   // Format date for display
@@ -345,8 +361,8 @@ export default function Todo() {
     const isTomorrow = date.toDateString() === tomorrow.toDateString();
 
     const timeString = date.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
+      hour: "numeric",
+      minute: "2-digit",
     });
 
     if (isToday) {
@@ -355,9 +371,9 @@ export default function Todo() {
       return `Tomorrow at ${timeString}`;
     } else {
       return `${date.toLocaleDateString([], {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
+        weekday: "short",
+        month: "short",
+        day: "numeric",
       })} at ${timeString}`;
     }
   };
@@ -371,7 +387,7 @@ export default function Todo() {
 
     try {
       const res = await updateChecklistItem(id, { scope }, planId, scope);
-      console.log('res:', res);
+      console.log("res:", res);
     } catch (error) {
       // undo optimistic update
       console.error(`Error moving item to ${scope}:`, error);
@@ -382,7 +398,7 @@ export default function Todo() {
 
   // Update todo description
   const updateTodoDescription = async (id: string) => {
-    if (editText.trim() === '') return;
+    if (editText.trim() === "") return;
 
     // Find the original todo
     const originalTodo = todos.find((todo) => todo.id === id);
@@ -397,8 +413,8 @@ export default function Todo() {
 
     setTodos(
       todos.map((todo) =>
-        todo.id === id ? { ...todo, description: updatedText } : todo
-      )
+        todo.id === id ? { ...todo, description: updatedText } : todo,
+      ),
     );
 
     try {
@@ -409,31 +425,31 @@ export default function Todo() {
           description: editText.trim(),
         },
         planId,
-        taskType as 'daily' | 'longterm'
+        taskType as "daily" | "longterm",
       );
 
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Revert if failed
         setTodos(
           todos.map((todo) =>
-            todo.id === id ? { ...todo, description: originalText } : todo
-          )
+            todo.id === id ? { ...todo, description: originalText } : todo,
+          ),
         );
-        setError('Failed to update task. Please try again.');
+        setError("Failed to update task. Please try again.");
       }
     } catch (error) {
-      console.error('Error updating todo description:', error);
+      console.error("Error updating todo description:", error);
       // Revert if exception
       setTodos(
         todos.map((todo) =>
-          todo.id === id ? { ...todo, description: originalText } : todo
-        )
+          todo.id === id ? { ...todo, description: originalText } : todo,
+        ),
       );
-      setError('Failed to update task. Please try again.');
+      setError("Failed to update task. Please try again.");
     } finally {
       setIsUpdating(false);
       setEditingId(null);
-      setEditText('');
+      setEditText("");
     }
   };
 
@@ -447,10 +463,10 @@ export default function Todo() {
       const newItem = await createChecklistItem(
         newTodo,
         planId,
-        taskType as 'daily' | 'longterm'
+        taskType as "daily" | "longterm",
       );
       setTodos((prev) => [...prev, newItem]);
-      setNewTodo('');
+      setNewTodo("");
       // Add animation for the new todo
       setNewTodoAnimations((prev) => ({
         ...prev,
@@ -464,7 +480,7 @@ export default function Todo() {
         }));
       }, 1000);
     } catch (error) {
-      console.error('Failed to add todo:', error);
+      console.error("Failed to add todo:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -477,10 +493,10 @@ export default function Todo() {
     try {
       setIsFetchingSuggestion(true);
       const response: ChecklistSuggestionResponse =
-        await getChecklistSuggestion(planId, taskType as 'daily' | 'longterm');
+        await getChecklistSuggestion(planId, taskType as "daily" | "longterm");
       setSuggestion(response.result);
     } catch (error) {
-      console.error('Failed to get suggestion:', error);
+      console.error("Failed to get suggestion:", error);
     } finally {
       setIsFetchingSuggestion(false);
     }
@@ -490,16 +506,16 @@ export default function Todo() {
   const useSuggestion = () => {
     if (suggestion) {
       // Clear current input and prepare for typing animation
-      setNewTodo('');
+      setNewTodo("");
       setFullText(suggestion);
       setTypingIndex(0);
       setIsTyping(true);
       setSuggestion(null);
-      setDisplaySuggestion('');
+      setDisplaySuggestion("");
     }
   };
 
-  console.log('@Debug todos:', todos);
+  console.log("@Debug todos:", todos);
 
   // Delete a todo
   const deleteTodo = async (todoId: string) => {
@@ -510,20 +526,20 @@ export default function Todo() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/plans/${planId}/checklists/${todoId}`,
         {
-          method: 'DELETE',
-          credentials: 'include',
-        }
+          method: "DELETE",
+          credentials: "include",
+        },
       );
 
       if (!response.ok) {
-        throw new Error('Failed to delete task');
+        throw new Error("Failed to delete task");
       }
 
       // Remove the deleted todo from the state
       setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== todoId));
     } catch (error) {
-      console.error('Error deleting task:', error);
-      setError('Failed to delete task');
+      console.error("Error deleting task:", error);
+      setError("Failed to delete task");
     } finally {
       setIsUpdating(false);
     }
@@ -533,7 +549,7 @@ export default function Todo() {
   const fetchDailyInsights = async () => {
     try {
       // First check if there are any long-term items
-      const longTermResponse = await fetchChecklist(planId, 'longterm');
+      const longTermResponse = await fetchChecklist(planId, "longterm");
       if (!longTermResponse.result || longTermResponse.result.length === 0) {
         // No long-term items, so no need to fetch insights
         setDailyInsights([]);
@@ -550,7 +566,7 @@ export default function Todo() {
         setVisibleInsights([]);
       }
     } catch (error) {
-      console.error('Failed to fetch daily insights:', error);
+      console.error("Failed to fetch daily insights:", error);
       // Clear insights on error
       setDailyInsights([]);
       setVisibleInsights([]);
@@ -580,24 +596,24 @@ export default function Todo() {
       const newItem = await createChecklistItem(
         description,
         planId,
-        taskType as 'daily' | 'longterm'
+        taskType as "daily" | "longterm",
       );
 
       // Update the item with the real ID from the API
       setTodos((prevTodos) =>
-        prevTodos.map((todo) => (todo.id === tempId ? newItem : todo))
+        prevTodos.map((todo) => (todo.id === tempId ? newItem : todo)),
       );
 
       // Remove the suggestion from the list to provide feedback that it was added
       setDailyInsights((prevInsights) =>
-        prevInsights.filter((insight) => insight !== description)
+        prevInsights.filter((insight) => insight !== description),
       );
 
       // Clear errors if any
       setError(null);
     } catch (error) {
-      console.error('Failed to add suggested task:', error);
-      setError('Failed to add suggested task. Please try again.');
+      console.error("Failed to add suggested task:", error);
+      setError("Failed to add suggested task. Please try again.");
 
       // Create a fallback ID for the item in case of API failure
       const fallbackId = `fallback_${Date.now()}`;
@@ -647,42 +663,92 @@ export default function Todo() {
       const response = await archiveChecklistItem(
         id,
         planId,
-        taskType as 'daily' | 'longterm'
+        taskType as "daily" | "longterm",
       );
-      if (response.result !== 'success') {
+      if (response.result !== "success") {
         // Restore if archiving failed
         setTodos((prevTodos) => [...prevTodos, todoToArchive]);
         setArchivedTodos(archivedTodos.filter((todo) => todo.id !== id));
-        setError('Failed to archive task. Please try again.');
+        setError("Failed to archive task. Please try again.");
       }
     } catch (error) {
-      console.error('Error archiving todo:', error);
+      console.error("Error archiving todo:", error);
       // Restore if exception
       setTodos((prevTodos) => [...prevTodos, todoToArchive]);
       setArchivedTodos(archivedTodos.filter((todo) => todo.id !== id));
-      setError('Failed to archive task. Please try again.');
+      setError("Failed to archive task. Please try again.");
     }
   };
 
   // Load archived todos
   const loadArchivedTodos = async () => {
-    if (taskType !== 'archived') return;
+    if (taskType !== "archived") return;
 
     try {
-      const response = await fetchArchivedChecklist(planId, 'daily');
+      const response = await fetchArchivedChecklist(planId, "daily");
       setArchivedTodos(response.result || []);
     } catch (error) {
-      console.error('Failed to load archived todos:', error);
-      setError('Failed to load archived tasks. Please try again.');
+      console.error("Failed to load archived todos:", error);
+      setError("Failed to load archived tasks. Please try again.");
     }
   };
 
   // Load archived todos when switching to archived view
   useEffect(() => {
-    if (taskType === 'archived') {
+    if (taskType === "archived") {
       loadArchivedTodos();
     }
   }, [taskType]);
+
+  // Fetch plan details including dailyReset
+  useEffect(() => {
+    const loadPlanDetails = async () => {
+      if (!planId) return;
+
+      console.log("@DailyReset fetching plan details");
+      try {
+        const [checklistResponse, planResponse] = await Promise.all([
+          fetchChecklist(planId, "daily"),
+          fetchPlanDetails(planId),
+        ]);
+        setTodos(checklistResponse.result);
+        console.log("@DailyReset daily reset with:", planResponse.result);
+        setDailyReset(planResponse.result.dailyReset);
+      } catch (error) {
+        console.log("@DailyReset Error fetching plan details");
+        console.error("Error fetching plan details:", error);
+      }
+    };
+
+    loadPlanDetails();
+  }, [planId]);
+
+  // Throttled toggle handler
+  const handleToggleDailyReset = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastToggleTime < TOGGLE_THROTTLE_MS) return;
+
+    setIsTogglingReset(true);
+    setLastToggleTime(now);
+
+    // Optimistic update
+    setDailyReset((prev) => !prev);
+
+    try {
+      const response = await toggleDailyReset(planId);
+      // Only revert if we get a non-200 status code
+      if (response.statusCode !== 200) {
+        // Revert on failure
+        setDailyReset((prev) => !prev);
+        throw new Error("Failed to toggle daily reset");
+      }
+    } catch (error) {
+      console.error("Error toggling daily reset:", error);
+      setError("Failed to update daily reset setting");
+    } finally {
+      setIsTogglingReset(false);
+    }
+  }, [planId, lastToggleTime]);
 
   if (loading) {
     return <div className="py-4">Loading tasks...</div>;
@@ -719,35 +785,33 @@ export default function Todo() {
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold">
           {showSettings
-            ? 'Settings'
+            ? "Settings"
             : showArchived
-            ? 'Archived Tasks'
-            : taskType === 'daily'
-            ? 'Daily'
-            : 'Long-term'}
+              ? "Archived Tasks"
+              : taskType === "daily"
+                ? "Daily"
+                : "Long-term"}
         </h2>
         {!showSettings && !showArchived && (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-3 text-sm">
               <button
-                onClick={() => setTaskType('daily')}
-                className={`transition-colors hover:opacity-80 ${
-                  taskType === 'daily' ? 'font-medium' : 'opacity-60'
-                }`}
+                onClick={() => setTaskType("daily")}
+                className={`transition-colors hover:opacity-80 ${taskType === "daily" ? "font-medium" : "opacity-60"
+                  }`}
                 style={{
-                  color: taskType === 'daily' ? 'rgb(247, 111, 83)' : '',
+                  color: taskType === "daily" ? "rgb(247, 111, 83)" : "",
                 }}
               >
                 Daily
               </button>
               <span className="opacity-30">|</span>
               <button
-                onClick={() => setTaskType('longterm')}
-                className={`transition-colors hover:opacity-80 ${
-                  taskType === 'longterm' ? 'font-medium' : 'opacity-60'
-                }`}
+                onClick={() => setTaskType("longterm")}
+                className={`transition-colors hover:opacity-80 ${taskType === "longterm" ? "font-medium" : "opacity-60"
+                  }`}
                 style={{
-                  color: taskType === 'longterm' ? 'rgb(247, 111, 83)' : '',
+                  color: taskType === "longterm" ? "rgb(247, 111, 83)" : "",
                 }}
               >
                 Long-term
@@ -788,17 +852,25 @@ export default function Todo() {
             <div>
               <h3 className="text-sm font-medium mb-1">Refresh daily tasks</h3>
               <p className="text-xs text-gray-500">
-                Automatically refresh daily tasks at the start of each day
+                Automatically refresh daily tasks at the start of each day.{" "}
+              </p>
+              <p className="text-xs text-gray-500">
+                This helps you automatically re-setup daily tasks that you may
+                want to work towards daily.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 className="sr-only peer"
-                checked={refreshDailyTasks}
-                onChange={(e) => setRefreshDailyTasks(e.target.checked)}
+                checked={dailyReset}
+                onChange={handleToggleDailyReset}
+                disabled={isTogglingReset}
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
+              <div
+                className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 dark:peer-focus:ring-orange-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500 ${isTogglingReset ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+              ></div>
             </label>
           </div>
 
@@ -856,7 +928,7 @@ export default function Todo() {
                     onClick={() => deleteTodo(todo.id)}
                     title="Delete task permanently"
                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                    style={{ color: 'rgb(247, 111, 83)' }}
+                    style={{ color: "rgb(247, 111, 83)" }}
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -882,26 +954,25 @@ export default function Todo() {
       {!showSettings && !showArchived && (
         <div className="animate-slideIn">
           {/* Only show add form and AI suggestion for non-archived views */}
-          {taskType !== 'archived' && (
+          {taskType !== "archived" && (
             <div className="space-y-3">
               <form onSubmit={addTodo} className="flex space-x-2">
                 <input
                   type="text"
                   value={newTodo}
                   onChange={(e) => setNewTodo(e.target.value)}
-                  placeholder={`Add a new ${
-                    taskType === 'daily' ? 'task' : 'goal'
-                  }...`}
+                  placeholder={`Add a new ${taskType === "daily" ? "task" : "goal"
+                    }...`}
                   className="flex-1 px-0 py-0 text-sm bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-orange-500 dark:focus:border-orange-500 focus:outline-none"
                   disabled={isSubmitting || isTyping}
                 />
                 <button
                   type="submit"
                   className="px-4 py-2 rounded bg-white/5 dark:bg-gray-900/10"
-                  style={{ color: 'rgb(247, 111, 83)' }}
+                  style={{ color: "rgb(247, 111, 83)" }}
                   disabled={isSubmitting || isTyping}
                 >
-                  {isSubmitting ? 'Adding...' : 'Add'}
+                  {isSubmitting ? "Adding..." : "Add"}
                 </button>
               </form>
 
@@ -914,7 +985,7 @@ export default function Todo() {
                   className="text-sm text-gray-600 flex items-center px-3 py-1.5 rounded-md transition-colors bg-white/5"
                 >
                   {isFetchingSuggestion ? (
-                    'Getting suggestion...'
+                    "Getting suggestion..."
                   ) : (
                     <>
                       <svg
@@ -964,11 +1035,11 @@ export default function Todo() {
           {todos.length === 0 ? (
             <div className="py-4 text-center">
               <p className="text-gray-500 text-sm">
-                {taskType === 'daily'
-                  ? 'No daily tasks yet. Add one above!'
-                  : taskType === 'longterm'
-                  ? 'No long-term goals yet. Add one above!'
-                  : 'No archived items found.'}
+                {taskType === "daily"
+                  ? "No daily tasks yet. Add one above!"
+                  : taskType === "longterm"
+                    ? "No long-term goals yet. Add one above!"
+                    : "No archived items found."}
               </p>
             </div>
           ) : (
@@ -976,9 +1047,8 @@ export default function Todo() {
               {todos.map((todo) => (
                 <li
                   key={todo.id}
-                  className={`relative flex items-center justify-between group transition-all duration-200 ${
-                    newTodoAnimations[todo.id] ? 'animate-fadeIn' : ''
-                  } ${taskType === 'archived' ? 'opacity-60' : ''}`}
+                  className={`relative flex items-center justify-between group transition-all duration-200 ${newTodoAnimations[todo.id] ? "animate-fadeIn" : ""
+                    } ${taskType === "archived" ? "opacity-60" : ""}`}
                 >
                   {editingId === todo.id ? (
                     <div className="flex items-center space-x-3 flex-1">
@@ -990,8 +1060,8 @@ export default function Todo() {
                           onChange={(e) => setEditText(e.target.value)}
                           className="flex-1 px-0 py-0 text-sm bg-transparent border-b border-gray-300 dark:border-gray-600 focus:border-orange-500 dark:focus:border-orange-500 focus:outline-none"
                           style={{
-                            color: todo.done ? 'rgb(247, 111, 83)' : '',
-                            textDecoration: todo.done ? 'line-through' : 'none',
+                            color: todo.done ? "rgb(247, 111, 83)" : "",
+                            textDecoration: todo.done ? "line-through" : "none",
                             opacity: todo.done ? 0.7 : 1,
                           }}
                           disabled={isUpdating}
@@ -999,10 +1069,10 @@ export default function Todo() {
                         <button
                           onClick={() => updateTodoDescription(todo.id)}
                           className="px-2 py-1 text-xs rounded bg-white/5"
-                          style={{ color: 'rgb(247, 111, 83)' }}
+                          style={{ color: "rgb(247, 111, 83)" }}
                           disabled={isUpdating}
                         >
-                          {isUpdating ? 'Saving...' : 'Save'}
+                          {isUpdating ? "Saving..." : "Save"}
                         </button>
                         <button
                           onClick={cancelEditing}
@@ -1022,9 +1092,8 @@ export default function Todo() {
                       />
                       <div className="flex flex-1 flex-wrap space-x-2">
                         <label
-                          className={`text-sm cursor-pointer flex-1 ${
-                            todo.done ? 'line-through opacity-70' : ''
-                          }`}
+                          className={`text-sm cursor-pointer flex-1 ${todo.done ? "line-through opacity-70" : ""
+                            }`}
                         >
                           {todo.description}
                         </label>
@@ -1043,10 +1112,10 @@ export default function Todo() {
                           <button
                             onClick={scheduleTodo}
                             className="px-2 py-1 text-xs rounded bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-800/60 border border-orange-200 dark:border-orange-800"
-                            style={{ color: 'rgb(247, 111, 83)' }}
+                            style={{ color: "rgb(247, 111, 83)" }}
                             disabled={isScheduling || !scheduleDate}
                           >
-                            {isScheduling ? 'Saving...' : 'Schedule'}
+                            {isScheduling ? "Saving..." : "Schedule"}
                           </button>
                           <button
                             onClick={cancelScheduling}
@@ -1063,7 +1132,7 @@ export default function Todo() {
                       <div
                         className="flex items-center space-x-3 flex-1"
                         onClick={() => toggleTodo(todo.id)}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: "pointer" }}
                       >
                         <div className="flex flex-1 space-x-2">
                           <input
@@ -1072,18 +1141,16 @@ export default function Todo() {
                             onChange={() => toggleTodo(todo.id)}
                             className="w-4 h-4 rounded border-gray-300 dark:border-gray-600"
                             style={{
-                              color: 'rgb(247, 111, 83)',
-                              accentColor: 'rgb(247, 111, 83)',
+                              color: "rgb(247, 111, 83)",
+                              accentColor: "rgb(247, 111, 83)",
                             }}
                             disabled={isUpdating}
                           />
                           <div className="flex flex-col flex-1">
                             <label
-                              className={`text-sm cursor-pointer flex-1 ${
-                                todo.done ? 'line-through opacity-70' : ''
-                              } ${
-                                newTodoAnimations[todo.id] ? 'relative' : ''
-                              }`}
+                              className={`text-sm cursor-pointer flex-1 ${todo.done ? "line-through opacity-70" : ""
+                                } ${newTodoAnimations[todo.id] ? "relative" : ""
+                                }`}
                             >
                               {todo.description}
                             </label>
@@ -1109,13 +1176,13 @@ export default function Todo() {
                       </div>
 
                       <div className="absolute right-[0] flex space-x-1">
-                        {taskType === 'archived' ? (
+                        {taskType === "archived" ? (
                           // Delete button for archived items
                           <button
                             onClick={() => deleteTodo(todo.id)}
                             title="Delete task permanently"
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                            style={{ color: 'rgb(247, 111, 83)' }}
+                            style={{ color: "rgb(247, 111, 83)" }}
                           >
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
@@ -1139,8 +1206,8 @@ export default function Todo() {
                               className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                               style={{
                                 color: todo.scheduledTime
-                                  ? 'rgb(247, 111, 83)'
-                                  : 'rgb(150, 150, 150)',
+                                  ? "rgb(247, 111, 83)"
+                                  : "rgb(150, 150, 150)",
                               }}
                             >
                               <svg
@@ -1162,7 +1229,7 @@ export default function Todo() {
                               onClick={() => startEditing(todo)}
                               title="Edit task"
                               className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                              style={{ color: 'rgb(247, 111, 83)' }}
+                              style={{ color: "rgb(247, 111, 83)" }}
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -1179,7 +1246,7 @@ export default function Todo() {
                               onClick={() => archiveTodo(todo.id)}
                               title="Archive task"
                               className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                              style={{ color: 'rgb(247, 111, 83)' }}
+                              style={{ color: "rgb(247, 111, 83)" }}
                             >
                               <svg
                                 xmlns="http://www.w3.org/2000/svg"
@@ -1202,7 +1269,7 @@ export default function Todo() {
           )}
 
           {/* Daily Insights Section - Only show for daily view */}
-          {taskType === 'daily' && todos.length > 0 && (
+          {taskType === "daily" && todos.length > 0 && (
             <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
@@ -1243,7 +1310,7 @@ export default function Todo() {
                   onClick={toggleInsightsVisibility}
                   className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                 >
-                  {showInsights ? 'Hide suggestions' : 'Show suggestions'}
+                  {showInsights ? "Hide suggestions" : "Show suggestions"}
                 </button>
               </div>
 
@@ -1259,17 +1326,16 @@ export default function Todo() {
                     {dailyInsights.map((insight, index) => (
                       <li
                         key={`insight-${index}`}
-                        className={`flex items-center justify-between transition-all duration-500 ${
-                          visibleInsights[index]
-                            ? 'opacity-100 translate-y-0'
-                            : 'opacity-0 translate-y-2'
-                        }`}
+                        className={`flex items-center justify-between transition-all duration-500 ${visibleInsights[index]
+                            ? "opacity-100 translate-y-0"
+                            : "opacity-0 translate-y-2"
+                          }`}
                       >
                         <span className="text-sm text-gray-300">{insight}</span>
                         <button
                           onClick={() => addInsightAsTodo(insight)}
                           className="text-xs px-2 py-1 rounded bg-white/5 hover:bg-white/10 dark:hover:bg-gray-700/50"
-                          style={{ color: 'rgb(247, 111, 83)' }}
+                          style={{ color: "rgb(247, 111, 83)" }}
                         >
                           Add
                         </button>

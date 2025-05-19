@@ -1,11 +1,11 @@
-import { config } from '@/config/environment';
+import { config } from "@/config/environment";
 
 // API base URL from environment config
 const API_BASE_URL = config.apiBaseUrl;
 
 export const scope = {
-  longterm: 'longterm',
-  daily: 'daily',
+  longterm: "longterm",
+  daily: "daily",
 } as const;
 export type ScopeEnum = (typeof scope)[keyof typeof scope];
 
@@ -18,7 +18,18 @@ export interface ChecklistItem {
 }
 
 export interface ChecklistResponse {
+  statusCode: number;
+  message: string;
   result: ChecklistItem[];
+}
+
+export interface PlanResponse {
+  statusCode: number;
+  message: string;
+  result: {
+    items: ChecklistItem[];
+    dailyReset: boolean;
+  };
 }
 
 export interface ChecklistCreateRequest {
@@ -32,11 +43,11 @@ export interface UpdateChecklistItemRequest {
 }
 
 export interface DeleteChecklistItemResponse {
-  result: 'success' | 'failure';
+  result: "success" | "failure";
 }
 
 export interface UpdateChecklistItemResponse {
-  result: 'success' | 'failure';
+  result: "success" | "failure";
   item?: ChecklistItem;
 }
 
@@ -65,6 +76,12 @@ export interface PlanDetailData {
   focus: string;
 }
 
+export interface ApiResponse {
+  statusCode: number;
+  message: string;
+  result: "success" | "failure";
+}
+
 /**
  * Fetch Plan Information
  */
@@ -83,11 +100,11 @@ export const fetchPlan = async (id: string): Promise<PlanDetailResponse> => {
  */
 export const fetchChecklist = async (
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily',
-  archived: boolean = false
+  scope: "daily" | "longterm" = "daily",
+  archived: boolean = false,
 ): Promise<ChecklistResponse> => {
   const response = await fetch(
-    `${API_BASE_URL}/api/plans/${planId}/checklists?scope=${scope}&archived=${archived}`
+    `${API_BASE_URL}/api/plans/${planId}/checklists?scope=${scope}&archived=${archived}`,
   );
 
   if (!response.ok) {
@@ -103,17 +120,17 @@ export const fetchChecklist = async (
 export const createChecklistItem = async (
   description: string,
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<ChecklistItem> => {
   const response = await fetch(
     `${API_BASE_URL}/api/plans/${planId}/checklists`,
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ description, scope }),
-    }
+    },
   );
 
   if (!response.ok) {
@@ -132,31 +149,31 @@ export const updateChecklistItem = async (
   id: string,
   updates: UpdateChecklistItemRequest,
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<UpdateChecklistItemResponse> => {
   try {
     const response = await fetch(
       `${API_BASE_URL}/api/plans/${planId}/checklists/${id}?scope=${scope}`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(updates),
-      }
+      },
     );
 
     if (!response.ok) {
       throw new Error(
-        `Failed to update checklist item: ${response.statusText}`
+        `Failed to update checklist item: ${response.statusText}`,
       );
     }
 
     const data = await response.json();
-    return { result: 'success', item: data };
+    return { result: "success", item: data };
   } catch (err) {
-    console.error('Failed to update checklist item:', err);
-    return { result: 'failure' };
+    console.error("Failed to update checklist item:", err);
+    return { result: "failure" };
   }
 };
 
@@ -166,23 +183,23 @@ export const updateChecklistItem = async (
 export const deleteChecklistItem = async (
   id: string,
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<DeleteChecklistItemResponse> => {
   try {
     const response = await fetch(
       `${API_BASE_URL}/api/plans/${planId}/checklists/${id}?scope=${scope}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     return await response.json();
   } catch (err) {
-    console.log('Failed to delete checklist item, error:', err);
-    return { result: 'failure' };
+    console.log("Failed to delete checklist item, error:", err);
+    return { result: "failure" };
   }
 };
 
@@ -191,26 +208,26 @@ export const deleteChecklistItem = async (
  */
 export const getChecklistSuggestion = async (
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<ChecklistSuggestionResponse> => {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/insights/checklist-suggestion?plan_id=${planId}&scope=${scope}`
+      `${API_BASE_URL}/api/insights/checklist-suggestion?plan_id=${planId}&scope=${scope}`,
     );
 
     if (!response.ok) {
       throw new Error(
-        `Failed to get checklist suggestion: ${response.statusText}`
+        `Failed to get checklist suggestion: ${response.statusText}`,
       );
     }
 
     return await response.json();
   } catch (err) {
-    console.error('Failed to get checklist suggestion:', err);
+    console.error("Failed to get checklist suggestion:", err);
     // Return a fallback suggestion if the API fails
     return {
-      message: 'Failed to generate suggestion',
-      result: 'Review your current project priorities',
+      message: "Failed to generate suggestion",
+      result: "Review your current project priorities",
       statusCode: 200,
     };
   }
@@ -223,31 +240,31 @@ export const scheduleChecklistItem = async (
   id: string,
   planId: string,
   scheduleTime: Date,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<UpdateChecklistItemResponse> => {
   try {
     const response = await fetch(
       `${API_BASE_URL}/api/plans/${planId}/checklists/${id}/schedule?scope=${scope}`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ scheduledTime: scheduleTime.toISOString() }),
-      }
+      },
     );
 
     if (!response.ok) {
       throw new Error(
-        `Failed to schedule checklist item: ${response.statusText}`
+        `Failed to schedule checklist item: ${response.statusText}`,
       );
     }
 
     const data = await response.json();
-    return { result: 'success', item: data };
+    return { result: "success", item: data };
   } catch (err) {
-    console.error('Failed to schedule checklist item:', err);
-    return { result: 'failure' };
+    console.error("Failed to schedule checklist item:", err);
+    return { result: "failure" };
   }
 };
 
@@ -255,11 +272,11 @@ export const scheduleChecklistItem = async (
  * Get daily insights suggestions based on long-term items
  */
 export const getDailyInsights = async (
-  planId: string
+  planId: string,
 ): Promise<DailyInsightsResponse> => {
   try {
     const response = await fetch(
-      `${config.apiBaseUrl}/api/insights/checklist-suggestion-daily?plan_id=${planId}`
+      `${config.apiBaseUrl}/api/insights/checklist-suggestion-daily?plan_id=${planId}`,
     );
 
     if (!response.ok) {
@@ -268,10 +285,10 @@ export const getDailyInsights = async (
 
     return await response.json();
   } catch (error) {
-    console.error('Failed to get daily insights:', error);
+    console.error("Failed to get daily insights:", error);
     // Return a fallback suggestion if the API fails
     return {
-      message: 'Failed to generate insights',
+      message: "Failed to generate insights",
       result: [],
       statusCode: 200,
     };
@@ -284,31 +301,31 @@ export const getDailyInsights = async (
 export const archiveChecklistItem = async (
   id: string,
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<UpdateChecklistItemResponse> => {
   try {
-    console.log('planId:', planId, ' checklist id:', id);
+    console.log("planId:", planId, " checklist id:", id);
     const response = await fetch(
       `${API_BASE_URL}/api/plans/${planId}/checklists/${id}/archive?scope=${scope}`,
       {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     if (!response.ok) {
       throw new Error(
-        `Failed to archive checklist item: ${response.statusText}`
+        `Failed to archive checklist item: ${response.statusText}`,
       );
     }
 
     const data = await response.json();
-    return { result: 'success', item: data };
+    return { result: "success", item: data };
   } catch (err) {
-    console.error('Failed to archive checklist item:', err);
-    return { result: 'failure' };
+    console.error("Failed to archive checklist item:", err);
+    return { result: "failure" };
   }
 };
 
@@ -317,17 +334,52 @@ export const archiveChecklistItem = async (
  */
 export const fetchArchivedChecklist = async (
   planId: string,
-  scope: 'daily' | 'longterm' = 'daily'
+  scope: "daily" | "longterm" = "daily",
 ): Promise<ChecklistResponse> => {
   const response = await fetch(
-    `${API_BASE_URL}/api/plans/${planId}/checklists/archived?scope=${scope}`
+    `${API_BASE_URL}/api/plans/${planId}/checklists/archived?scope=${scope}`,
   );
 
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch archived checklist: ${response.statusText}`
+      `Failed to fetch archived checklist: ${response.statusText}`,
     );
   }
 
   return await response.json();
+};
+
+export const toggleDailyReset = async (
+  planId: string,
+): Promise<ApiResponse> => {
+  const response = await fetch(
+    `http://localhost:6060/api/plans/${planId}/toggle-daily-reset`,
+    {
+      method: "PATCH",
+      credentials: "include",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to toggle daily reset");
+  }
+
+  return response.json();
+};
+
+export const fetchPlanDetails = async (
+  planId: string,
+): Promise<PlanResponse> => {
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/plans/${planId}`,
+    {
+      credentials: "include",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch plan details");
+  }
+
+  return response.json();
 };
