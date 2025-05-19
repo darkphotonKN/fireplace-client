@@ -1,24 +1,28 @@
-'use client';
+"use client";
 
-import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import Todo from '@/components/Todo';
-import GitHub from '@/components/GitHub';
-import { useEffect, useState } from 'react';
-import { fetchPlan, PlanDetailData } from '@/services/api';
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import Todo from "@/components/Todo";
+import GitHub from "@/components/GitHub";
+import { useEffect, useState, use } from "react";
+import { fetchPlan, PlanDetailData } from "@/services/api";
 
-export default function PlanDetail({ params }: { params: { planId: string } }) {
-  const { planId } = params;
+export default function PlanDetail({
+  params,
+}: {
+  params: Promise<{ planId: string }>;
+}) {
+  const { planId } = use(params);
   const [plan, setPlan] = useState<PlanDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadPlanData() {
       if (!planId) return;
 
       setIsLoading(true);
-      setError('');
+      setError("");
 
       try {
         const response = await fetchPlan(planId);
@@ -26,11 +30,11 @@ export default function PlanDetail({ params }: { params: { planId: string } }) {
         if (response.result) {
           setPlan(response.result);
         } else {
-          setError(response.message || 'Failed to load plan');
+          setError(response.message || "Failed to load plan");
         }
       } catch (error) {
-        console.error('Error loading plan:', error);
-        setError('Failed to load plan data');
+        console.error("Error loading plan:", error);
+        setError("Failed to load plan data");
       } finally {
         setIsLoading(false);
       }
@@ -45,14 +49,15 @@ export default function PlanDetail({ params }: { params: { planId: string } }) {
         {/* Title Section */}
         <div className="backdrop-blur-sm rounded-2xl p-8 shadow-lg bg-white/5 dark:bg-gray-900/10">
           <h1 className="text-4xl font-bold mb-2">
-            {isLoading ? 'Loading...' : error ? 'Plan Details' : plan?.name}
+            {isLoading ? "Loading..." : error ? "Plan Details" : plan?.name}
           </h1>
           <p className="opacity-80">
             {isLoading
-              ? '...'
+              ? "..."
               : error
-              ? error
-              : plan?.description || "Let's continue your development journey."}
+                ? error
+                : plan?.description ||
+                "Let's continue your development journey."}
           </p>
 
           <div className="absolute bottom-[20px] right-[20px] z-10">
