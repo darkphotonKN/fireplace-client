@@ -33,6 +33,14 @@ interface Plan {
   dailyReset: boolean;
 }
 
+interface VideoSuggestion {
+  title: string;
+  url: string;
+  source: string;
+  type: string;
+  description: string;
+}
+
 export default function Todo() {
   const params = useParams();
   const planId = params?.planId as string;
@@ -91,6 +99,16 @@ export default function Todo() {
   const [isTogglingReset, setIsTogglingReset] = useState(false);
   const [lastToggleTime, setLastToggleTime] = useState(0);
   const TOGGLE_THROTTLE_MS = 1000; // 1 second throttle
+
+  // Delete confirmation state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [todoToDelete, setTodoToDelete] = useState<ChecklistItem | null>(null);
+
+  // Video suggestions state
+  const [videoSuggestions, setVideoSuggestions] = useState<VideoSuggestion[]>(
+    []
+  );
+  const [loadingVideos, setLoadingVideos] = useState(false);
 
   // Load show/hide preference from localStorage on mount
   useEffect(() => {
@@ -697,11 +715,18 @@ export default function Todo() {
     }
   }, [showArchived, planId]);
 
-  // Delete archived todo
-  const deleteArchivedTodo = async (todoId: string) => {
+  // Delete archived todo with confirmation
+  const confirmDeleteTodo = (todo: ChecklistItem) => {
+    setTodoToDelete(todo);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!todoToDelete) return;
+
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/plans/${planId}/checklists/${todoId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/plans/${planId}/checklists/${todoToDelete.id}`,
         {
           method: 'DELETE',
           credentials: 'include',
@@ -714,11 +739,14 @@ export default function Todo() {
 
       // Remove the deleted todo from the state
       setArchivedTodos((prevTodos) =>
-        prevTodos.filter((todo) => todo.id !== todoId)
+        prevTodos.filter((todo) => todo.id !== todoToDelete.id)
       );
     } catch (error) {
       console.error('Error deleting task:', error);
       setError('Failed to delete task');
+    } finally {
+      setShowDeleteModal(false);
+      setTodoToDelete(null);
     }
   };
 
@@ -771,6 +799,48 @@ export default function Todo() {
       setIsTogglingReset(false);
     }
   }, [planId, lastToggleTime]);
+
+  // Fetch video suggestions
+  const fetchVideoSuggestions = async () => {
+    if (!planId) return;
+
+    setLoadingVideos(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/insights/suggest-videos?plan_id=${planId}`,
+        {
+          credentials: 'include',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch video suggestions');
+      }
+
+      const data = await response.json();
+      setVideoSuggestions(data.result || []);
+    } catch (error) {
+      console.error('Error fetching video suggestions:', error);
+      setError('Failed to load video suggestions');
+    } finally {
+      setLoadingVideos(false);
+    }
+  };
+
+  // Fetch videos when component mounts
+  useEffect(() => {
+    fetchVideoSuggestions();
+  }, [planId]);
+
+  // Extract video ID from YouTube URL
+  const getYouTubeThumbnail = (url: string) => {
+    const videoId = url.match(
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/
+    )?.[1];
+    return videoId
+      ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+      : null;
+  };
 
   if (loading) {
     return <div className="py-4">Loading tasks...</div>;
@@ -953,7 +1023,7 @@ export default function Todo() {
                     </div>
                   </div>
                   <button
-                    onClick={() => deleteArchivedTodo(todo.id)}
+                    onClick={() => confirmDeleteTodo(todo)}
                     title="Delete task permanently"
                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                     style={{ color: 'rgb(247, 111, 83)' }}
@@ -975,6 +1045,36 @@ export default function Todo() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && todoToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-6 max-w-md w-full mx-4 animate-slideIn">
+            <h3 className="text-lg font-medium mb-2">Delete Task</h3>
+            <p className="text-gray-300 mb-4">
+              Are you sure you want to permanently delete "
+              {todoToDelete.description}"? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setTodoToDelete(null);
+                }}
+                className="px-4 py-2 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 rounded bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 text-sm"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1383,45 +1483,236 @@ export default function Todo() {
         </div>
       )}
 
-      <style jsx>{`
-        @keyframes fadeIn {
-          0% {
+      {/* Video Suggestions Section */}
+      {!showSettings && !showArchived && (
+        <div className="mt-8 border-t border-gray-100 dark:border-gray-800 pt-4">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium">Recommended Videos</h3>
+              <div className="relative group">
+                <button
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                  aria-label="Information about video suggestions"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                  <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg">
+                    <p className="text-sm text-white mb-1">
+                      Personalized video recommendations
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Videos are suggested based on your plan&apos;s focus and
+                      tasks
+                    </p>
+                  </div>
+                  <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white/5 border-r border-b border-white/10 transform rotate-45"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {loadingVideos ? (
+            <div className="py-4 text-center">
+              <p className="text-gray-500 text-sm">
+                Loading video suggestions...
+              </p>
+            </div>
+          ) : videoSuggestions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {videoSuggestions.map((video, index) => (
+                <a
+                  key={index}
+                  href={video.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg overflow-hidden hover:bg-white/10 transition-all duration-200"
+                >
+                  <div className="relative aspect-video">
+                    <img
+                      src={getYouTubeThumbnail(video.url)}
+                      alt={video.title}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-12 h-12 text-white opacity-80 group-hover:opacity-100 transition-opacity"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h4 className="text-sm font-medium mb-1 line-clamp-2">
+                      {video.title}
+                    </h4>
+                    <p className="text-xs text-gray-400 line-clamp-2">
+                      {video.description}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="py-4 text-center">
+              <p className="text-gray-500 text-sm">
+                No video suggestions available.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <style jsx global>{`
+        /* DatePicker Dark Theme Styles */
+        .react-datepicker {
+          background-color: rgb(17, 24, 39) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          border-radius: 0.5rem !important;
+          font-family: inherit !important;
+          position: relative !important;
+        }
+
+        .react-datepicker::before {
+          content: '' !important;
+          position: absolute !important;
+          inset: 0 !important;
+          background-color: rgba(255, 255, 255, 0.05) !important;
+          border-radius: 0.5rem !important;
+          pointer-events: none !important;
+        }
+
+        .react-datepicker__header {
+          background-color: rgb(17, 24, 39) !important;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+          padding-top: 0.5rem !important;
+          position: relative !important;
+        }
+
+        .react-datepicker__header::before {
+          content: '' !important;
+          position: absolute !important;
+          inset: 0 !important;
+          background-color: rgba(255, 255, 255, 0.05) !important;
+          pointer-events: none !important;
+        }
+
+        .react-datepicker__time-box {
+          background-color: rgb(17, 24, 39) !important;
+          position: relative !important;
+        }
+
+        .react-datepicker__time-box::before {
+          content: '' !important;
+          position: absolute !important;
+          inset: 0 !important;
+          background-color: rgba(255, 255, 255, 0.05) !important;
+          pointer-events: none !important;
+        }
+
+        .react-datepicker__current-month,
+        .react-datepicker__day-name,
+        .react-datepicker__day {
+          color: rgb(229, 231, 235) !important;
+        }
+
+        .react-datepicker__day:hover {
+          background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .react-datepicker__day--selected {
+          background-color: rgb(247, 111, 83) !important;
+          color: white !important;
+        }
+
+        .react-datepicker__day--keyboard-selected {
+          background-color: rgba(247, 111, 83, 0.5) !important;
+        }
+
+        .react-datepicker__time-container {
+          border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .react-datepicker__time-list-item {
+          color: rgb(229, 231, 235) !important;
+        }
+
+        .react-datepicker__time-list-item:hover {
+          background-color: rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .react-datepicker__time-list-item--selected {
+          background-color: rgb(247, 111, 83) !important;
+          color: white !important;
+        }
+
+        .react-datepicker__navigation {
+          top: 0.5rem !important;
+        }
+
+        .react-datepicker__navigation-icon::before {
+          border-color: rgb(229, 231, 235) !important;
+        }
+
+        .react-datepicker__navigation:hover *::before {
+          border-color: rgb(247, 111, 83) !important;
+        }
+
+        .react-datepicker__day--disabled {
+          color: rgba(229, 231, 235, 0.3) !important;
+        }
+
+        .react-datepicker__day--outside-month {
+          color: rgba(229, 231, 235, 0.5) !important;
+        }
+
+        .react-datepicker__input-container input {
+          background-color: transparent !important;
+          color: rgb(229, 231, 235) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          border-radius: 0.375rem !important;
+          padding: 0.5rem !important;
+          width: 100% !important;
+        }
+
+        .react-datepicker__input-container input:focus {
+          outline: none !important;
+          border-color: rgb(247, 111, 83) !important;
+        }
+
+        /* Animation for the popup */
+        .react-datepicker-popper {
+          z-index: 50 !important;
+          animation: datepickerFadeIn 0.2s ease-out !important;
+        }
+
+        @keyframes datepickerFadeIn {
+          from {
             opacity: 0;
-            transform: translateY(10px);
+            transform: translateY(-10px);
           }
-          100% {
+          to {
             opacity: 1;
             transform: translateY(0);
           }
-        }
-        @keyframes cursorBlink {
-          0%,
-          50% {
-            opacity: 1;
-          }
-          51%,
-          100% {
-            opacity: 0;
-          }
-        }
-        @keyframes slideIn {
-          0% {
-            opacity: 0;
-            transform: translateX(20px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        .animate-cursor {
-          animation: cursorBlink 0.8s infinite;
-        }
-        .animate-slideIn {
-          animation: slideIn 0.3s ease-out;
         }
       `}</style>
     </div>
